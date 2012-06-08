@@ -15,6 +15,7 @@
   Hilbert.
 -}
 
+
 module RTrees (
 	-- * Tipos exportados.
 		-- ** Rectángulos.
@@ -38,6 +39,9 @@ module RTrees (
 where
 
 import qualified Data.Sequence as DS
+import Data.Bits
+
+type Point = (Int,Int);
 
 {-
   El tipo de datos @Rectangle@ representa rectangulos de coordenadas 
@@ -55,6 +59,11 @@ data Rectangle = R {
 	lr :: (Int, Int),	-- ^ Vertice inferior derecho     (X1,Y1)
 	ur :: (Int, Int)	-- ^ Vertice superior derecho     (X1,Y0)
 } deriving (Show, Eq)
+
+
+splitPolicy = 2		--cuantos nodos vecinos deben estar llenos antes de hacer split
+nodeCapacity = 4	--cuantos hijos puede tener un nodo
+leafCapacity = 4	--cuantos rectangulos puede guardar una hoja
 
 
 {-
@@ -84,3 +93,32 @@ data RTree = Branch Int Rectangle (DS.Seq RTree)	-- ^ Rama del árbol
 --chooseLeaf :: Rectangle -> Int -> RTree
 --adjustTree
 --overflowHandling
+--
+--
+--
+
+
+
+--el valor de Hilbert para el centro de un rectangulo
+hv:: Rectangle -> Int
+hv (R _ (llx,lly) _ (urx,ury))  = hilbertDistance 17 ((llx+urx) `div` 2,(ury+lly) `div` 2)
+
+
+--el valor de Hilbert para un punto cualquiera
+hilbertValue :: (Bits a, Ord a) => Int -> (a,a) -> a
+hilbertValue d (x,y)
+	| x < 0 || x >= 1 `shiftL` d = error "x bounds"
+	| y < 0 || y >= 1 `shiftL` d = error "y bounds"
+	| otherwise = dist (1 `shiftL` (d - 1)) (1 `shiftL` ((d - 1) * 2)) 0 x y
+		where
+			dist 0 _ result _ _ = result
+			dist side area result x y = case (compare x side, compare y side) of
+				(LT, LT) -> step result y x
+				(LT, _)  -> step (result + area) x (y - side)
+				(_, LT)  -> step (result + area * 3) (side - y - 1) (side * 2 - x - 1)
+				(_, _)   -> step (result + area * 2) (x - side) (y - side)
+				where step = dist (side `shiftR` 1) (area `shiftR` 2)
+
+--
+--
+--
