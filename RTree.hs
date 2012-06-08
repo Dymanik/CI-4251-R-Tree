@@ -72,10 +72,15 @@ data RTree = Branch Int Rectangle (DS.Seq RTree)	-- ^ Rama del árbol
 			deriving (Show, Eq)
 
 
-insert :: RTree -> Rectangle -> Either e RTree
+--insert :: RTree -> Rectangle -> Either e RTree
 
 
-delete :: RTree -> Rectangle -> Either e RTree
+--delete :: RTree -> Rectangle -> Either e RTree
 
 
-search :: RTree -> Rectangle -> Maybe [Rectangle]
+--search :: RTree -> Rectangle -> Maybe [Rectangle]
+
+-- Func internas
+--chooseLeaf :: Rectangle -> Int -> RTree
+--adjustTree
+--overflowHandling
