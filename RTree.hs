@@ -39,9 +39,11 @@ module RTrees (
 where
 
 import qualified Data.Sequence as DS
+import qualified Data.Foldable as F
 import Data.Bits
 
-type Point = (Int,Int);
+type Point = (Int,Int)
+type HV = Int
 
 {-
   El tipo de datos @Rectangle@ representa rectangulos de coordenadas 
@@ -76,21 +78,40 @@ leafCapacity = 4	--cuantos rectangulos puede guardar una hoja
   Se declara derivando de @Eq@ pues en la implantación interna
   del R-Tree es necesario comparar árboles.
 -}
-data RTree = Branch Int Rectangle (DS.Seq RTree)	-- ^ Rama del árbol
+data RTree = Branch {hv::HV, rect::Rectangle, childs::(DS.Seq RTree)}	-- ^ Rama del árbol
 			| Leaf (DS.Seq Rectangle)				-- ^ Hoja del árbol
 			deriving (Show, Eq)
 
 
 --insert :: RTree -> Rectangle -> Either e RTree
+insert t r = growTree  
+
+growTree :: [RTree] -> RTree
+growTree [r]	=	r 
+growTree [r,x]	=	Branch (max (hv r) (hv x)) (boundingBox [rect r,rect x]) (DS.empty DS.|> r DS.|> x)
+
+
+boundingBox :: (F.Foldable f) => f Rectangle -> Rectangle
+boundingBox s = F.foldr1 f s
+		where 
+			f r1 r2 = buildR (g (ul r1) (ul r2) (lr r1) (lr r2)) 
+			g (x10,y10) (x20,y20) (x11,y11) (x21,y21) = (min x10 x20,max y10 y20,max x11 x21, min y11 y21)
+			buildR (x0,y0,x1,y1) = R (x0,y0) (x0,y1) (x1,y0) (x1,y1)
 
 
 --delete :: RTree -> Rectangle -> Either e RTree
-
+delete = 0
 
 --search :: RTree -> Rectangle -> Maybe [Rectangle]
+search = 0
 
 -- Func internas
---chooseLeaf :: Rectangle -> Int -> RTree
+--chooseLeaf :: RTree-> Rectangle -> HV -> RTree
+--chooseLeaf n@(Leaf seq) = n
+--chooseLeaf (Branch hv seq) = case (:<seq) of
+--			n@(Leaf _) -> chooseLeaf n
+--			otherwise  -> chooseLeaf (:< (DS.dropWhileL )
+
 --adjustTree
 --overflowHandling
 --
@@ -100,8 +121,8 @@ data RTree = Branch Int Rectangle (DS.Seq RTree)	-- ^ Rama del árbol
 
 
 --el valor de Hilbert para el centro de un rectangulo
-hv:: Rectangle -> Int
-hv (R _ (llx,lly) _ (urx,ury))  = hilbertDistance 17 ((llx+urx) `div` 2,(ury+lly) `div` 2)
+hilbval:: Rectangle -> Int
+hilbval (R _ (llx,lly) _ (urx,ury))  = hilbertValue 17 ((llx+urx) `div` 2,(ury+lly) `div` 2)
 
 
 --el valor de Hilbert para un punto cualquiera
