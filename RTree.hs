@@ -16,13 +16,16 @@
 -}
 
 
-module RTrees (
+module RTree (
 	-- * Tipos exportados.
 		-- ** Rectángulos.
 	Rectangle (..),
 		-- ** Árbol de almacenamiento y consulta de rectángulos.
 	RTree (..),
 	-- * Funciones exportadas.
+		-- ** Permite la comparación de dos rectángulos según su número 
+		-- de Hilbert
+	orderHV,
 		-- ** Agrega un nuevo rectángulo a la estructura. Insertar un
 		-- rectángulo duplicado es causa de error.
 	insert,
@@ -57,13 +60,19 @@ type HV = Int
 
   Se declara derivando de @Eq@ pues en la implantación interna
   del R-Tree es necesario comparar rectángulos.
+  
+  Se declara derivando de @Ord@ pues es necesario ordenar rectángulos.
 -}
 data Rectangle = R {
 	ul :: (Int, Int),	-- ^ Vertice superior izquierdo   (X0,Y0)
 	ll :: (Int, Int),	-- ^ Vertice inferior izquierdo   (X0,Y1)
 	lr :: (Int, Int),	-- ^ Vertice inferior derecho     (X1,Y1)
 	ur :: (Int, Int)	-- ^ Vertice superior derecho     (X1,Y0)
-} deriving (Show, Eq)
+} deriving (Show, Eq, Ord)
+
+-- permite comparar dos rectangulos segun su numero de hilbert
+orderHV :: Rectangle -> Rectangle -> Ordering
+orderHV r1 r2 = compare (hilbval r1) (hilbval r2)
 
 
 splitPolicy = 2		--cuantos nodos vecinos deben estar llenos antes de hacer split
@@ -181,7 +190,9 @@ search (Branch _hv _rec trees) r = if (null g)
 	then Nothing
 	else Just g
 	where
+		g :: [Rectangle]
 		g = concat $ DM.catMaybes $ F.toList $ fmap h trees
+		h :: RTree -> Maybe [Rectangle]
 		h tree = search tree r
 
 -- Func internas
