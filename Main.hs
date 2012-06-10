@@ -20,13 +20,24 @@ import qualified Data.Sequence as DS
 import Data.List.Split
 import qualified Data.List.Ordered as DLO
 import Text.ParserCombinators.Parsec
---import Control.Monad.Applicative
+import Control.Applicative((<$>),(<*))
+import Control.Monad
 
+parseRects :: String -> Either ParseError [Rectangle]
+parseRects s = either (Left) (return . f)	(parse (many filerects) "" s) where
+			f = foldr ((++) . g) []
+			g r = case goodR ( h r) of
+				True -> [createRect (h r)]
+				otherwise -> []
+			h = map read
 
+filerects = (sepBy1 (many1 digit) (comma)) <* newline
 
---parseRects s = (parse filerects "" s)
+readInt ::  String -> Int
+readInt s = read s::Int
 
---filerects = createRect <$>
+comma = (char ',')
+
 
 
 numericMatrix :: [[String]] -> [[Int]]
@@ -41,9 +52,14 @@ goodR [xa,ya,xb,yb,xc,yc,xd,yd] =	xa==xb && xc==xd && ya==yd && yb==yc &&
 									ya>=0 && ya<=65536 && yb>=0 && yb<=65536
 
 
+main = do
+		s <- readFile "rects.txt"
+		print (length $ lines s)
+		either (putStrLn . show) (print . length ) (parseRects s)
+
 --create :: Rectangle -> RTree -> RTree
 --create r t = insert t r
-
+{-
 rtree :: String -> IO ()
 rtree arch
 	| null arch = do
@@ -59,4 +75,4 @@ rtree arch
 		let rects = DLO.nubSortOn orderHV (map createRect goodRects)
 		putStrLn $ show rects
 		--return $ foldl create (Leaf $ DS.empty) rects
-
+-}
