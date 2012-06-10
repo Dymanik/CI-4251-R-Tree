@@ -36,7 +36,9 @@ module RTree (
 		-- suministrado como parámetro se solapa con uno o más
 		-- rectángulos en la estructura. El resultado de la función es 
 		-- la lista de rectángulos solapados
-	search
+	search,
+
+	createRect
 	
 ) 
 where
@@ -45,6 +47,7 @@ import qualified Data.Sequence as DS
 import qualified Data.Foldable as F
 import qualified Data.Maybe as DM
 import Data.Bits
+import Data.List(sortBy)
 
 type Point = (Int,Int)
 
@@ -76,7 +79,7 @@ orderHV r1 r2 = compare (hilbval r1) (hilbval r2)
 
 
 splitPolicy = 2		--cuantos nodos vecinos deben estar llenos antes de hacer split
-nodeCapacity = 4	--cuantos hijos puede tener un nodo
+nodeCapacity = 5--cuantos hijos puede tener un nodo
 leafCapacity = 4	--cuantos rectangulos puede guardar una hoja
 
 
@@ -91,12 +94,52 @@ leafCapacity = 4	--cuantos rectangulos puede guardar una hoja
   del R-Tree es necesario comparar árboles.
 -}
 data RTree = 
-	Branch {hv::HV, rect::Rectangle, childs::(DS.Seq RTree)}	-- ^ Rama del árbol
-	| Leaf (DS.Seq Rectangle)									-- ^ Hoja del árbol
+	Branch {hv::HV, mbr::Rectangle, childs::(DS.Seq RTree)}	-- ^ Rama del árbol
+	| Leaf {hv::HV, mbr::Rectangle, rects::(DS.Seq Rectangle)}		-- ^ Hoja del árbol
+	| Empty													-- ^ Arbol vacio
 	deriving (Show, Eq)
 
-	
-	--el valor de Hilbert para el centro de un rectangulo
+
+
+--Constructores
+createRect :: [Int] -> Rectangle
+createRect [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
+
+makeLeaf ::  DS.Seq Rectangle -> RTree
+makeLeaf ls = Leaf (hilbval	br) (br) (ls)
+	where
+		br = boundingBox ls
+
+makeBranch ::  DS.Seq RTree -> RTree
+makeBranch ls = Branch (hilbval br) (br) (ls)
+	where
+		br = boundingBox (fmap mbr ls)
+
+raiseTree ::  DS.Seq RTree -> RTree
+raiseTree ls  = case DS.length ls of
+	0	-> Empty
+	1 	-> DS.index ls 0
+	otherwise -> raiseTree $ roots ls where
+		roots = roots' DS.empty
+		roots' res bs = case DS.null bs of
+			True	  -> res
+			otherwise -> roots' (res DS.|> (makeBranch child)) rest where
+				(child,rest) = DS.splitAt nodeCapacity bs
+
+
+fromList ::  [Rectangle] -> RTree
+fromList = raiseTree . leaves . sortBy orderHV
+	where 
+		leaves  = leaves' DS.empty 
+		leaves' res [] = res
+		leaves' res s  = leaves' (res DS.|> (makeLeaf (DS.fromList rec))) rest where
+			(rec,rest) = splitAt leafCapacity s
+
+
+
+
+
+--el valor de Hilbert para el centro de un rectangulo
 hilbval:: Rectangle -> Int
 hilbval (R _ (llx,lly) _ (urx,ury)) = 
 	hilbertValue 17 ((llx+urx) `div` 2,(ury+lly) `div` 2)
@@ -124,7 +167,7 @@ insert t r = growTree
 growTree :: [RTree] -> RTree
 growTree [r]	= r 
 growTree [r,x]	= 
-	Branch (max (hv r) (hv x)) (boundingBox [rect r,rect x]) (DS.empty DS.|> r DS.|> x)
+	Branch (max (hv r) (hv x)) (boundingBox [mbr r,mbr x]) (DS.empty DS.|> r DS.|> x)
 
 
 boundingBox :: (F.Foldable f) => f Rectangle -> Rectangle
@@ -149,11 +192,11 @@ d = R {ul=(33,30), ll=(33,43), lr=(37,43), ur=(37,30)}
 a2 = R {ul=(10,5), ll=(10,80), lr=(50,80), ur=(50,5)}
 no = R {ul=(30,15), ll=(30,25), lr=(40,25), ur=(40,15)}
 enlos2 = R (10,30) (10,80) (72,80) (72,30)
-hoja1 = Leaf (DS.fromList [b,c,d])
+hoja1 = makeLeaf (DS.fromList [b,c,d])
 papa1 = R {ul=(10,5), ll=(10,80), lr=(50,80), ur=(50,5)}
 x = R {ul=(65,50), ll=(65,55), lr=(70,55), ur=(70,50)}
 y = R {ul=(75,40), ll=(75,50), lr=(80,50), ur=(80,40)}
-hoja2 = Leaf (DS.fromList [x,y])
+hoja2 = makeLeaf (DS.fromList [x,y])
 papa2 = R {ul=(40,30), ll=(40,90), lr=(90,90), ur=(90,30)}
 papa = R (0,0) (0,100) (100,100) (100,0)
 arbol = Branch (hilbval papa) papa (DS.fromList [
@@ -163,7 +206,7 @@ arbol = Branch (hilbval papa) papa (DS.fromList [
 
 
 search :: RTree -> Rectangle -> Maybe [Rectangle]
-search (Leaf rs) r =  if (null f)
+search (Leaf _ _ rs) r =  if (null f)
 	then Nothing
 	else Just f
 	where
