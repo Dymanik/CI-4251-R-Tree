@@ -48,7 +48,8 @@ import qualified Data.Sequence as DS
 import qualified Data.Foldable as F
 import qualified Data.Maybe as DM
 import Data.Bits
-import Data.List(sortBy)
+import qualified Data.List as DL
+import Data.Either
 
 type Point = (Int,Int)
 
@@ -129,7 +130,7 @@ raiseTree ls  = case DS.length ls of
 
 
 fromList ::  [Rectangle] -> RTree
-fromList = raiseTree . leaves . sortBy orderHV
+fromList = raiseTree . leaves . DL.sortBy orderHV
 	where 
 		leaves  = leaves' DS.empty 
 		leaves' res [] = res
@@ -180,8 +181,39 @@ boundingBox = F.foldr1 f
 		buildR (x0,y0,x1,y1) = R (x0,y0) (x0,y1) (x1,y0) (x1,y1)
 
 
---delete :: RTree -> Rectangle -> Either e RTree
-delete = 0
+delete :: RTree -> Rectangle -> Either String RTree
+delete Empty _r = {-throwError-} Left "Eliminar rectángulo inexistente"
+delete (Leaf hv rec rs) r 
+	| (length eliminado) == (DS.length rs) = {-throwError-} Left "Eliminar rectángulo inexistente"
+	| otherwise = Right $ ifEmpty eliminado
+	where
+		ifEmpty :: [Rectangle] -> RTree
+		ifEmpty [] = Empty
+		ifEmpty xs = makeLeaf (DS.fromList xs)
+		eliminado :: [Rectangle]
+		eliminado = DL.delete r (F.toList rs)
+delete (Branch _hv _rec trees) r = case g of
+	(null, Nothing) -> {-throwError-} Left "Eliminar rectángulo inexistente"
+	([newTree], Just n) -> Right $ noBranch $ rearmar newTree n
+	where
+		noBranch :: DS.Seq RTree -> RTree
+		noBranch seqt 
+			| DS.null seqt = Empty
+			| otherwise = makeBranch seqt
+		borrar :: Int -> DS.Seq RTree -> DS.Seq RTree
+		borrar pos arboles = 
+			DS.fromList ((F.toList arboles) DL.\\ [DS.index arboles pos])
+		rearmar :: RTree -> Int -> DS.Seq RTree
+		rearmar Empty i = borrar i trees
+		rearmar nuevo i = DS.update i nuevo trees
+		g :: ([RTree], Maybe Int)
+		g = (rights (F.toList (fmap f trees)), buscaIndex 0 (F.toList (fmap f trees)))
+		buscaIndex :: Int -> [Either String RTree] -> Maybe Int
+		buscaIndex _ [] = Nothing
+		buscaIndex n ((Right _):xs) = Just n
+		buscaIndex n ((Left _):xs) = buscaIndex (n+1) xs
+		f :: RTree -> Either String RTree
+		f tree = delete tree r
 
 
 ----------------------------------------------------------
