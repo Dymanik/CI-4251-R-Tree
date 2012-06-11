@@ -28,7 +28,7 @@ module RTree (
 	orderHV,
 		-- ** Agrega un nuevo rectángulo a la estructura. Insertar un
 		-- rectángulo duplicado es causa de error.
-	insert,
+	--insert,
 		-- ** Elimina un rectángulo presente en la estructura. Eliminar 
 		-- un rectángulo inexistente es causa de error.
 	delete,
@@ -36,15 +36,15 @@ module RTree (
 		-- suministrado como parámetro se solapa con uno o más
 		-- rectángulos en la estructura. El resultado de la función es 
 		-- la lista de rectángulos solapados
-	search,
+	search
 
-	createRect,
-	fromList
+	--createRect,
+	--fromList
 	
 ) 
 where
 
-import qualified Data.Sequence as DS
+import qualified Data.Set as DS
 import qualified Data.Foldable as F
 import qualified Data.Maybe as DM
 import Data.Bits
@@ -73,7 +73,13 @@ data Rectangle = R {
 	ll :: (Int, Int),	-- ^ Vertice inferior izquierdo   (X0,Y1)
 	lr :: (Int, Int),	-- ^ Vertice inferior derecho     (X1,Y1)
 	ur :: (Int, Int)	-- ^ Vertice superior derecho     (X1,Y0)
-} deriving (Show, Eq, Ord)
+} deriving (Show, Eq)
+
+instance Ord Rectangle where
+	r1 > r2 = (hilbval r1) > (hilbval r2)
+	r1 >= r2 = (hilbval r1) >= (hilbval r2)
+	r1 < r2 = (hilbval r1) < (hilbval r2)
+	r1 <= r2 = (hilbval r1) <= (hilbval r2)
 
 -- permite comparar dos rectangulos segun su numero de hilbert
 orderHV :: Rectangle -> Rectangle -> Ordering
@@ -96,46 +102,46 @@ leafCapacity = 4	--cuantos rectangulos puede guardar una hoja
   del R-Tree es necesario comparar árboles.
 -}
 data RTree = 
-	Branch {hv::HV, mbr::Rectangle, childs::(DS.Seq RTree)}	-- ^ Rama del árbol
-	| Leaf {hv::HV, mbr::Rectangle, rects::(DS.Seq Rectangle)}		-- ^ Hoja del árbol
+	Branch {hv::HV, mbr::Rectangle, childs::(DS.Set RTree)}	-- ^ Rama del árbol
+	| Leaf {hv::HV, mbr::Rectangle, rects::(DS.Set Rectangle)}		-- ^ Hoja del árbol
 	| Empty													-- ^ Arbol vacio
-	deriving (Show, Eq)
+	deriving (Show, Eq, Ord)
 
 
 
 --Constructores
-createRect :: [Int] -> Rectangle
-createRect [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
+--createRect :: [Int] -> Rectangle
+--createRect [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
 
-makeLeaf ::  DS.Seq Rectangle -> RTree
+makeLeaf ::  DS.Set Rectangle -> RTree
 makeLeaf ls = Leaf (hilbval	br) (br) (ls)
 	where
 		br = boundingBox ls
 
-makeBranch ::  DS.Seq RTree -> RTree
+makeBranch ::  DS.Set RTree -> RTree
 makeBranch ls = Branch (hilbval br) (br) (ls)
 	where
-		br = boundingBox (fmap mbr ls)
+		br = boundingBox (DS.map mbr ls)
 
-raiseTree ::  DS.Seq RTree -> RTree
-raiseTree ls  = case DS.length ls of
+--raiseTree ::  DS.Set RTree -> RTree
+{-raiseTree ls  = case DS.length ls of
 	0	-> Empty
-	1 	-> DS.index ls 0
+	1 	-> DS.findMin ls
 	otherwise -> raiseTree $ roots ls where
 		roots = roots' DS.empty
 		roots' res bs = case DS.null bs of
 			True	  -> res
 			otherwise -> roots' (res DS.|> (makeBranch child)) rest where
-				(child,rest) = DS.splitAt nodeCapacity bs
+				(child,rest) = DS.splitAt nodeCapacity bs-}
 
 
-fromList ::  [Rectangle] -> RTree
-fromList = raiseTree . leaves . DL.sortBy orderHV
+--fromList ::  [Rectangle] -> RTree
+{-fromList = raiseTree . leaves . DL.sortBy orderHV
 	where 
 		leaves  = leaves' DS.empty 
 		leaves' res [] = res
 		leaves' res s  = leaves' (res DS.|> (makeLeaf (DS.fromList rec))) rest where
-			(rec,rest) = splitAt leafCapacity s
+		(rec,rest) = splitAt leafCapacity s-}
 
 
 
@@ -164,13 +170,13 @@ hilbertValue d (x,y)
 
 
 --insert :: RTree -> Rectangle -> Either e RTree
-insert t r = growTree  
+{-insert t r = growTree  
 
 growTree :: [RTree] -> RTree
 growTree [r]	= r 
 growTree [r,x]	= 
 	Branch (max (hv r) (hv x)) (boundingBox [mbr r,mbr x]) (DS.empty DS.|> r DS.|> x)
-
+	-}
 
 boundingBox :: (F.Foldable f) => f Rectangle -> Rectangle
 boundingBox = F.foldr1 f
@@ -184,34 +190,29 @@ boundingBox = F.foldr1 f
 delete :: RTree -> Rectangle -> Either String RTree
 delete Empty _r = {-throwError-} Left "Eliminar rectángulo inexistente"
 delete (Leaf hv rec rs) r 
-	| (length eliminado) == (DS.length rs) = {-throwError-} Left "Eliminar rectángulo inexistente"
-	| otherwise = Right $ ifEmpty eliminado
+	| (DS.size eliminado) == (DS.size rs) = {-throwError-} Left "Eliminar rectángulo inexistente"
+	| DS.null eliminado = Right Empty
+	| otherwise = Right (makeLeaf eliminado)
 	where
-		ifEmpty :: [Rectangle] -> RTree
-		ifEmpty [] = Empty
-		ifEmpty xs = makeLeaf (DS.fromList xs)
-		eliminado :: [Rectangle]
-		eliminado = DL.delete r (F.toList rs)
+		eliminado :: DS.Set Rectangle
+		eliminado = DS.delete r rs
 delete (Branch _hv _rec trees) r = case g of
 	(null, Nothing) -> {-throwError-} Left "Eliminar rectángulo inexistente"
-	([newTree], Just n) -> Right $ noBranch $ rearmar newTree n
+	([newTree], Just oldTree) -> Right $ noBranch $ rearmar newTree oldTree
 	where
 		noBranch :: DS.Seq RTree -> RTree
 		noBranch seqt 
 			| DS.null seqt = Empty
 			| otherwise = makeBranch seqt
-		borrar :: Int -> DS.Seq RTree -> DS.Seq RTree
-		borrar pos arboles = 
-			DS.fromList ((F.toList arboles) DL.\\ [DS.index arboles pos])
-		rearmar :: RTree -> Int -> DS.Seq RTree
-		rearmar Empty i = borrar i trees
-		rearmar nuevo i = DS.update i nuevo trees
-		g :: ([RTree], Maybe Int)
-		g = (rights (F.toList (fmap f trees)), buscaIndex 0 (F.toList (fmap f trees)))
-		buscaIndex :: Int -> [Either String RTree] -> Maybe Int
-		buscaIndex _ [] = Nothing
-		buscaIndex n ((Right _):xs) = Just n
-		buscaIndex n ((Left _):xs) = buscaIndex (n+1) xs
+		rearmar :: RTree -> RTree -> DS.Seq RTree
+		rearmar Empty old = DS.delete old trees
+		rearmar nuevo old = DS.insert nuevo (DS.delete old trees)
+		g :: ([RTree], Maybe RTree)
+		g = (rights (DS.toList (DS.map f trees)), elimViejo trees (DS.toList (DS.map f trees)))
+		elimViejo :: DS.Set RTree -> [Either String RTree] -> Maybe RTree
+		elimViejo _ [] = Nothing
+		elimViejo ts ((Right _):xs) = Just (DS.findMin ts)
+		elimViejo ts ((Left _):xs) = elimViejo (DS.deleteMin ts) xs
 		f :: RTree -> Either String RTree
 		f tree = delete tree r
 
@@ -220,7 +221,7 @@ delete (Branch _hv _rec trees) r = case g of
 -- ARBOL DE PRUEBA
 a = R {ul=(30,40), ll=(30,55), lr=(35,55), ur=(35,40)}
 b = R {ul=(20,15), ll=(20,25), lr=(30,25), ur=(30,15)}
-c = R {ul=(30,40), ll=(30,35), lr=(35,55), ur=(35,40)}
+c = R {ul=(30,40), ll=(30,55), lr=(35,55), ur=(35,40)}
 d = R {ul=(33,30), ll=(33,43), lr=(37,43), ur=(37,30)}
 a2 = R {ul=(10,5), ll=(10,80), lr=(50,80), ur=(50,5)}
 no = R {ul=(30,15), ll=(30,25), lr=(40,25), ur=(40,15)}
@@ -233,8 +234,8 @@ hoja2 = makeLeaf (DS.fromList [x,y])
 papa2 = R {ul=(40,30), ll=(40,90), lr=(90,90), ur=(90,30)}
 papa = R (0,0) (0,100) (100,100) (100,0)
 arbol = Branch (hilbval papa) papa (DS.fromList [
-	Branch (hilbval papa1) papa1 (DS.fromList [hoja1]),
-	Branch (hilbval papa2) papa2 (DS.fromList [hoja2])])
+	makeBranch (DS.fromList [hoja1]),
+	makeBranch (DS.fromList [hoja2])])
 --------------------------------------------------------------
 
 
@@ -267,7 +268,7 @@ search (Branch _hv _rec trees) r = if (null g)
 	else Just g
 	where
 		g :: [Rectangle]
-		g = concat $ DM.catMaybes $ F.toList $ fmap h trees
+		g = concat $ DM.catMaybes $ F.toList $ DS.map h trees
 		h :: RTree -> Maybe [Rectangle]
 		h tree = search tree r
 
