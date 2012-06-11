@@ -36,11 +36,10 @@ module RTree (
 		-- suministrado como parámetro se solapa con uno o más
 		-- rectángulos en la estructura. El resultado de la función es 
 		-- la lista de rectángulos solapados
-	search
+	search,
 
-	--createRect,
-	--fromList
-	
+	fromList
+		
 ) 
 where
 
@@ -76,10 +75,7 @@ data Rectangle = R {
 } deriving (Show, Eq)
 
 instance Ord Rectangle where
-	r1 > r2 = (hilbval r1) > (hilbval r2)
-	r1 >= r2 = (hilbval r1) >= (hilbval r2)
-	r1 < r2 = (hilbval r1) < (hilbval r2)
-	r1 <= r2 = (hilbval r1) <= (hilbval r2)
+	compare r1 r2 = orderHV r1 r2
 
 -- permite comparar dos rectangulos segun su numero de hilbert
 orderHV :: Rectangle -> Rectangle -> Ordering
@@ -105,13 +101,15 @@ data RTree =
 	Branch {hv::HV, mbr::Rectangle, childs::(DS.Set RTree)}	-- ^ Rama del árbol
 	| Leaf {hv::HV, mbr::Rectangle, rects::(DS.Set Rectangle)}		-- ^ Hoja del árbol
 	| Empty													-- ^ Arbol vacio
-	deriving (Show, Eq, Ord)
+	deriving (Show, Eq)
 
+instance Ord RTree where
+	compare t1 t2 = compare (hv t1) (hv t2)
 
 
 --Constructores
---createRect :: [Int] -> Rectangle
---createRect [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
+createRect :: [Int] -> Rectangle
+createRect [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
 
 makeLeaf ::  DS.Set Rectangle -> RTree
 makeLeaf ls = Leaf (hilbval	br) (br) (ls)
@@ -123,25 +121,25 @@ makeBranch ls = Branch (hilbval br) (br) (ls)
 	where
 		br = boundingBox (DS.map mbr ls)
 
---raiseTree ::  DS.Set RTree -> RTree
-{-raiseTree ls  = case DS.length ls of
+raiseTree ::  [RTree] -> RTree
+raiseTree ls  = case length ls of
 	0	-> Empty
-	1 	-> DS.findMin ls
+	1 	-> head ls
 	otherwise -> raiseTree $ roots ls where
-		roots = roots' DS.empty
-		roots' res bs = case DS.null bs of
-			True	  -> res
-			otherwise -> roots' (res DS.|> (makeBranch child)) rest where
-				(child,rest) = DS.splitAt nodeCapacity bs-}
+		roots = roots' []
+		roots' res bs = case null bs of
+			True	  -> reverse res
+			otherwise -> roots' ((makeBranch (DS.fromList(child))) : res) rest where
+				(child,rest) = splitAt nodeCapacity bs
 
 
 --fromList ::  [Rectangle] -> RTree
-{-fromList = raiseTree . leaves . DL.sortBy orderHV
+fromList = raiseTree . leaves . DL.sortBy orderHV
 	where 
-		leaves  = leaves' DS.empty 
-		leaves' res [] = res
-		leaves' res s  = leaves' (res DS.|> (makeLeaf (DS.fromList rec))) rest where
-		(rec,rest) = splitAt leafCapacity s-}
+		leaves  = leaves' [] 
+		leaves' res [] = reverse res
+		leaves' res s  = leaves' ((makeLeaf $ DS.fromList rec) : res ) rest where
+			(rec,rest) = splitAt leafCapacity s
 
 
 
@@ -170,13 +168,7 @@ hilbertValue d (x,y)
 
 
 --insert :: RTree -> Rectangle -> Either e RTree
-{-insert t r = growTree  
-
-growTree :: [RTree] -> RTree
-growTree [r]	= r 
-growTree [r,x]	= 
-	Branch (max (hv r) (hv x)) (boundingBox [mbr r,mbr x]) (DS.empty DS.|> r DS.|> x)
-	-}
+insert t r = 0  
 
 boundingBox :: (F.Foldable f) => f Rectangle -> Rectangle
 boundingBox = F.foldr1 f
@@ -186,9 +178,9 @@ boundingBox = F.foldr1 f
 			(min x10 x20, max y10 y20, max x11 x21, min y11 y21)
 		buildR (x0,y0,x1,y1) = R (x0,y0) (x0,y1) (x1,y0) (x1,y1)
 
-
 delete :: RTree -> Rectangle -> Either String RTree
-delete Empty _r = {-throwError-} Left "Eliminar rectángulo inexistente"
+delete Empty _r = {-throwError-} fail "Eliminar rectángulo inexistente"
+
 delete (Leaf hv rec rs) r 
 	| (DS.size eliminado) == (DS.size rs) = {-throwError-} Left "Eliminar rectángulo inexistente"
 	| DS.null eliminado = Right Empty
@@ -200,11 +192,11 @@ delete (Branch _hv _rec trees) r = case g of
 	(null, Nothing) -> {-throwError-} Left "Eliminar rectángulo inexistente"
 	([newTree], Just oldTree) -> Right $ noBranch $ rearmar newTree oldTree
 	where
-		noBranch :: DS.Seq RTree -> RTree
+		noBranch :: DS.Set RTree -> RTree
 		noBranch seqt 
 			| DS.null seqt = Empty
 			| otherwise = makeBranch seqt
-		rearmar :: RTree -> RTree -> DS.Seq RTree
+		rearmar :: RTree -> RTree -> DS.Set RTree
 		rearmar Empty old = DS.delete old trees
 		rearmar nuevo old = DS.insert nuevo (DS.delete old trees)
 		g :: ([RTree], Maybe RTree)
@@ -215,7 +207,6 @@ delete (Branch _hv _rec trees) r = case g of
 		elimViejo ts ((Left _):xs) = elimViejo (DS.deleteMin ts) xs
 		f :: RTree -> Either String RTree
 		f tree = delete tree r
-
 
 ----------------------------------------------------------
 -- ARBOL DE PRUEBA

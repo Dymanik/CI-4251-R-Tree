@@ -52,6 +52,12 @@ goodR [xa,ya,xb,yb,xc,yc,xd,yd] =	xa==xb && xc==xd && ya==yd && yb==yc &&
 									ya>=0 && ya<=65536 && yb>=0 && yb<=65536
 
 
+
+data Cmd = Insert Rectangle
+		| Delete Rectangle
+		| Search Rectangle Int
+		| Exit
+
 main = do
 		s <- readFile "rects.txt"
 		print (length $ lines s)
