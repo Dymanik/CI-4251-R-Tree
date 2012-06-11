@@ -38,8 +38,8 @@ module RTree (
 		-- la lista de rectángulos solapados
 	search,
 
-	fromList
-		
+	fromList,
+	createRect	
 ) 
 where
 
