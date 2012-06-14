@@ -3,7 +3,7 @@
 
   Programación Funcional Avanzada (CI4251)
 
-  0.1 2012-06-13
+  0.1 2012-06-14
 
 
   Johan González	07-40979
@@ -13,7 +13,7 @@
   Este módulo implanta una estructura de datos que almacena y consulta 
   datos geométricos de rectángulos, dicha estructura es un R-Tree de 
   Hilbert.
--}
+ -}
 
 
 module RTree (
@@ -35,10 +35,11 @@ module RTree (
 		-- ** Consulta la estructura para determinar si el rectángulo 
 		-- suministrado como parámetro se solapa con uno o más
 		-- rectángulos en la estructura. El resultado de la función es 
-		-- la lista de rectángulos solapados
+		-- la lista de rectángulos solapados.
 	search,
-
+		-- ** Construye un RTree a partir de una lista de rectángulos.
 	fromList,
+		-- ** Construye un Rectangle a partir de una lista de 8 enteros.
 	createRect	
 ) 
 where
@@ -50,14 +51,13 @@ import Data.Bits
 import qualified Data.List as DL
 import Data.Either
 import Control.Monad.Error
-
-type Point = (Int,Int)
+import Test.QuickCheck
 
 -- Hilbert Value
 type HV = Int
 
 {-
-  El tipo de datos @Rectangle@ representa rectangulos de coordenadas 
+  El tipo de datos @Rectangle@ representa rectángulos de coordenadas 
   X y Y entre 0 y 65536 mediante sus vertices.
 
   Se declara derivando de @Show@ para facilitar la depuración
@@ -66,8 +66,11 @@ type HV = Int
   Se declara derivando de @Eq@ pues en la implantación interna
   del R-Tree es necesario comparar rectángulos.
   
-  Se declara derivando de @Ord@ pues es necesario ordenar rectángulos.
--}
+  Se declara instancia de @Ord@ pues es necesario ordenar rectángulos.
+  
+  Se declara instancia de @Arbitrary@ pues es necesario generar 
+  rectángulos arbitrarios para casos de prueba con QuickCheck.
+ -}
 data Rectangle = R {
 	ul :: (Int, Int),	-- ^ Vertice superior izquierdo   (X0,Y0)
 	ll :: (Int, Int),	-- ^ Vertice inferior izquierdo   (X0,Y1)
@@ -78,26 +81,30 @@ data Rectangle = R {
 instance Ord Rectangle where
 	compare r1 r2 = orderHV r1 r2
 
--- permite comparar dos rectangulos segun su numero de hilbert
-orderHV :: Rectangle -> Rectangle -> Ordering
-orderHV r1 r2 = compare (hilbval r1) (hilbval r2)
-
-
-splitPolicy = 2		--cuantos nodos vecinos deben estar llenos antes de hacer split
-nodeCapacity = 5--cuantos hijos puede tener un nodo
-leafCapacity = 4	--cuantos rectangulos puede guardar una hoja
+instance Arbitrary Rectangle where
+	arbitrary = do
+		x0 <- choose (0,65535)
+		y0 <- choose (0,65535)
+		x1 <- choose (x0,65536)
+		y1 <- choose (y0,65536)
+		return $ R (x0,y0) (x0,y1) (x1,y1) (x1,y0)
 
 
 {-
-  El tipo de datos @RTree@ representa un R-Tree de Hilbert que almacena
-  rectángulos y permite consultarlos.
+  El tipo de datos @RTree@ representa un R-Tree de Hilbert que 
+  almacena rectángulos y permite consultarlos.
 
   Se declara derivando de @Show@ para facilitar la depuración
   y la creación de árboles "manualmente".
 
   Se declara derivando de @Eq@ pues en la implantación interna
   del R-Tree es necesario comparar árboles.
--}
+  
+  Se declara instancia de @Ord@ pues es necesario ordenar árboles.
+  
+  Se declara instancia de @Arbitrary@ pues es necesario generar 
+  árboles arbitrarios para casos de prueba con QuickCheck.
+ -}
 data RTree = 
 	Branch {hv::HV, mbr::Rectangle, childs::(DS.Set RTree)}	-- ^ Rama del árbol
 	| Leaf {hv::HV, mbr::Rectangle, rects::(DS.Set Rectangle)}	-- ^ Hoja del árbol
@@ -106,6 +113,13 @@ data RTree =
 
 instance Ord RTree where
 	compare t1 t2 = compare (hv t1) (hv t2)
+
+instance Arbitrary RTree where
+	arbitrary = do
+		rs <- suchThat (listOf1 $ (arbitrary :: Gen Rectangle)) f
+		return $ fromList rs
+		where
+			f xs = length xs > 100
 
 
 {- Error 
@@ -122,51 +136,38 @@ instance Ord RectError where
 	compare (RectangleNotFound r1) (RectangleNotFound r2) = orderHV r1 r2
 -}
 
---Constructores
-createRect :: [Int] -> Rectangle
-createRect [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
 
-makeLeaf ::  DS.Set Rectangle -> RTree
-makeLeaf ls = Leaf (hilbval	br) (br) (ls)
-	where
-		br = boundingBox ls
+{-
+  @splitPolicy@ es un valor constante que indica cuantos nodos vecinos 
+  en un RTree deben estar llenos antes de hacer split.
+ -}
+splitPolicy = 2
 
-makeBranch ::  DS.Set RTree -> RTree
-makeBranch ls = Branch (hilbval br) (br) (ls)
-	where
-		br = boundingBox (DS.map mbr ls)
+{-
+  @nodeCapacity@ es un valor constante que indica cuantos subárboles 
+  puede contener una rama.
+ -}
+nodeCapacity = 5
 
-raiseTree ::  [RTree] -> RTree
-raiseTree ls  = case length ls of
-	0	-> Empty
-	1 	-> head ls
-	otherwise -> raiseTree $ roots ls where
-		roots = roots' []
-		roots' res bs = case null bs of
-			True	  -> reverse res
-			otherwise -> roots' ((makeBranch (DS.fromList(child))) : res) rest where
-				(child,rest) = splitAt nodeCapacity bs
+{-
+  @leafCapacity@ es un valor constante que indica cuantos rectángulos 
+  puede contener una hoja.
+ -}
+leafCapacity = 4
 
 
---fromList ::  [Rectangle] -> RTree
-fromList = raiseTree . leaves . DL.sortBy orderHV
-	where 
-		leaves  = leaves' [] 
-		leaves' res [] = reverse res
-		leaves' res s  = leaves' ((makeLeaf $ DS.fromList rec) : res ) rest where
-			(rec,rest) = splitAt leafCapacity s
-
-
-
-
-
---el valor de Hilbert para el centro de un rectangulo
+{-
+  @hilbval@ calcula el valor o número de Hilbert para el centro de un
+  rectángulo.
+ -}
 hilbval:: Rectangle -> Int
 hilbval (R _ (llx,lly) _ (urx,ury)) = 
 	hilbertValue 17 ((llx+urx) `div` 2,(ury+lly) `div` 2)
 
-
---el valor de Hilbert para un punto cualquiera
+{-
+  @hilbertValue@ calcula el valor o número de Hilbert para un punto 
+  cualquiera.
+ -}
 hilbertValue :: (Bits a, Ord a) => Int -> (a,a) -> a
 hilbertValue d (x,y)
 	| x < 0 || x >= 1 `shiftL` d = error "x bounds"
@@ -182,7 +183,26 @@ hilbertValue d (x,y)
 				where step = dist (side `shiftR` 1) (area `shiftR` 2)
 
 
+{- 
+  @orderHV@ establece la comparación de dos rectangulos segun su número 
+  de Hilbert.
+ -}
+orderHV :: Rectangle -> Rectangle -> Ordering
+orderHV r1 r2 = compare (hilbval r1) (hilbval r2)
 
+
+{-
+  @createRect@ permite construir un rectángulo a partir de una lista 
+  de 8 enteros
+ -}
+createRect :: [Int] -> Rectangle
+createRect [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
+
+
+{-
+  @boundingBox@ calcula el rectángulo que envuelve a una serie de 
+  rectangulos.
+ -}
 boundingBox :: (F.Foldable f) => f Rectangle -> Rectangle
 boundingBox = F.foldr1 f
 	where 
@@ -192,9 +212,66 @@ boundingBox = F.foldr1 f
 		buildR (x0,y0,x1,y1) = R (x0,y0) (x0,y1) (x1,y1) (x1,y0)
 
 
-------------------------------------------------------------
+{-
+  @makeLeaf@ construye una hoja del árbol a partir de un conjunto de 
+  rectángulos.
+ -}
+makeLeaf ::  DS.Set Rectangle -> RTree
+makeLeaf ls = Leaf (hilbval br) (br) (ls)
+	where
+		br = boundingBox ls
 
--- Auxiliar para overflowHandling
+
+{-
+  @makeBranch@ cnstruye una rama del árbol a partir de un conjunto de 
+  árboles, sean hojas o ramas.
+ -}
+makeBranch ::  DS.Set RTree -> RTree
+makeBranch ls = Branch (hilbval br) (br) (ls)
+	where
+		br = boundingBox (DS.map mbr ls)
+
+
+{-
+  @raiseTree@ construye un árbol a partir de una lista de árboles.
+ -}
+raiseTree ::  [RTree] -> RTree
+raiseTree ls  = case length ls of
+	0	-> Empty
+	1 	-> head ls
+	otherwise -> raiseTree $ roots ls where
+		roots = roots' []
+		roots' res bs = case null bs of
+			True	  -> reverse res
+			otherwise -> 
+				roots' ((makeBranch (DS.fromList(child))) : res) rest where
+				(child,rest) = splitAt nodeCapacity bs
+
+
+{-
+  @fromList@ construye un árbol a partir de una lista de rectángulos.
+ -}
+fromList ::  [Rectangle] -> RTree
+fromList = raiseTree . leaves . DL.sortBy orderHV
+	where 
+		leaves  = leaves' [] 
+		leaves' res [] = reverse res
+		leaves' res s  = leaves' ((makeLeaf $ DS.fromList rec) : res ) rest where
+			(rec,rest) = splitAt leafCapacity s
+
+
+---------------------------------------------------------------------
+
+{- 
+  @overflow@ determina si ocurre overflow en el árbol luego de insertar
+  un rectángulo. 
+  
+  Si ocurre overflow se hace un split reordenando el árbol y lo separándolo 
+  en dos subárboles con un nuevo nodo padre que tendrá su valor de Hilbert 
+  igual a cero; de esta manera se reconoce que ocurrió un split. 
+  
+  Si no, retorna el árbol actual.
+ -}
 overflow :: RTree -> DS.Set RTree -> RTree
 overflow (Leaf _hv _rec rs) leafs
 	| exceso leafs = case (DS.findMin (childs rearmar)) of
@@ -231,10 +308,25 @@ overflow (Branch _hv _rec ts) trees
 		f branch = hv branch == 0
 
 
+{- 
+  @overflowHandling@ es el manejador de overflow al insertar un 
+  rectángulo en un árbol.
+  
+  Utiliza @overflow@ para determinar si ocurrió un overflow y 
+  manejarlo según sea el caso.
+ -}
 overflowHandling :: RTree -> RTree
 overflowHandling (Branch _hv _rec ts) = overflow (DS.findMin ts) ts
 
 
+{- 
+  @insert@ inserta un rectángulo en un árbol.
+  
+  Si el rectángulo ya se encuentra en el árbol se reporta un error
+  de rectángulo duplicado.
+  
+  Si no, se devulve el nuevo árbol.
+ -}
 insert :: RTree -> Rectangle -> Either String RTree
 insert Empty r = Right $ makeLeaf $ DS.singleton r
 insert (Leaf _hv _rec rs) r 
@@ -249,13 +341,21 @@ insert (Branch _hv _rec trees) r = case (elegirTree trees) of
 		elegirTree :: DS.Set RTree -> Either String RTree
 		elegirTree seqt = insert (arbol seqt) r
 		arbol :: DS.Set RTree -> RTree
-		arbol cjto = DS.findMin (snd (DS.partition f cjto))
+		arbol cjto
+			| DS.null (snd (DS.partition f cjto)) = DS.findMax cjto
+			| otherwise = DS.findMin (snd (DS.partition f cjto))
 		f :: RTree -> Bool
 		f tree = hv tree < hilbval r
 
 
---------------------------------------------------------
-
+{-
+  @delete@ elimina un rectángulo de un árbol.
+  
+  Si el rectángulo no se encuentra en el árbol se reporta un error
+  de rectángulo no encontrado.
+  
+  Si no, se devuelve el nuevo árbol.
+ -}
 delete :: RTree -> Rectangle -> Either String RTree
 delete Empty r = throwError "RectangleNotFound"
 delete (Leaf _hv _rec rs) r 
@@ -285,7 +385,192 @@ delete (Branch _hv _rec trees) r = case g of
 		f :: RTree -> Either String RTree
 		f tree = delete tree r
 
-----------------------------------------------------------
+
+
+{-
+  @search@ busca todos los rectángulos que se solapen con un 
+  rectángulo dado.
+  
+  Si no existen solapamientos con el rectángulo suministrado no se 
+  devuelve nada.
+  
+  Si existen se devuelve una lista de todos los rectángulos solapados. 
+ -}
+search :: RTree -> Rectangle -> Maybe [Rectangle]
+search (Leaf _ _ rs) r =  if (null f)
+	then Nothing
+	else Just f
+	where
+		f :: [Rectangle]
+		f = DS.toList $ DS.filter overlapped rs
+		overlapped :: Rectangle -> Bool
+		overlapped rec = (((fst (ul rec) < fst (ur r)) && 
+						(fst (ur r) <= fst (ur rec)) ||
+						(fst (ul rec) <= fst (ul r)) && 
+						(fst (ul r) < fst (ur rec))) &&
+						(((snd (ul rec) <= snd (ul r)) && 
+							(snd (ul r) < snd (ll rec))) || 
+							((snd (ul rec) < snd (ll r)) && 
+							(snd (ll r) <= snd (ll rec))))) ||
+						(((fst (ul r) < fst (ur rec)) && 
+						(fst (ur rec) <= fst (ur r)) ||
+						(fst (ul r) <= fst (ul rec)) && 
+						(fst (ul rec) < fst (ur r))) &&
+						(((snd (ul r) <= snd (ul rec)) && 
+							(snd (ul rec) < snd (ll r))) || 
+							((snd (ul r) < snd (ll rec)) && 
+							(snd (ll rec) <= snd (ll r)))))
+search (Branch _hv _rec trees) r = if (null g)
+	then Nothing
+	else Just g
+	where
+		g :: [Rectangle]
+		g = concat $ DM.catMaybes $ F.toList $ DS.map h trees
+		h :: RTree -> Maybe [Rectangle]
+		h tree = search tree r
+
+
+---------------------------------------------------------------------
+
+{-
+  @tall@ calcula la altura de un árbol desde su raíz hasta las hojas.
+  
+  Devuelve en una tupla la mínima altura del árbol y la máxima altura
+  del árbol. La diferencia entre estos dos valores debe ser a lo sumo
+  de una unidad.
+ -}
+tall :: RTree -> (Int,Int)
+tall Empty = (0,0)
+tall (Leaf _hv _rec _rs) = (1,1)
+tall (Branch _hv _rec ts) = (fst (DS.findMin talls), snd (DS.findMax talls))
+	where
+		talls :: DS.Set (Int,Int)
+		talls = DS.map f ts
+		f :: RTree -> (Int,Int)
+		f tree = ((fst (tall tree)) + 1, (snd (tall tree)) + 1)
+
+
+{-
+  @treeToSet@ devuelve el conjunto de rectángulos que conforman un árbol.
+ -}
+treeToSet :: RTree -> DS.Set Rectangle
+treeToSet Empty = DS.empty
+treeToSet (Leaf _hv _rec ls) = ls
+treeToSet (Branch _hv _rec ts) = 
+	DS.fold DS.union DS.empty (DS.map treeToSet ts)
+
+
+-- Propiedades de prueba para QuickCheck
+
+{-
+  @prop_tall_insert@ representa una propiedad que debe cumplirse al insertar
+  un rectángulo en un árbol.
+  
+  Insertar un rectángulo repetido genera error, sino la altura del árbol
+  resultante es igual,o a lo sumo superior por una unidad, a la altura del 
+  árbol antes de insertar el rectángulo.
+ -}
+prop_tall_insert :: RTree -> Rectangle -> Bool
+prop_tall_insert t r = if (DS.member r (treeToSet t)) 
+	then insert t r == throwError "DuplicateRectangle"
+	else (snd (tall (head (rights [insert t r]))) == snd (tall t)) || 
+		(snd (tall (head (rights [insert t r]))) == (snd (tall t)) + 1)
+
+
+{-
+  @prop_member_insert@ representa una propiedad que debe cumplirse al 
+  insertar un rectángulo en un árbol.
+  
+  Si al insertar un rectángulo se produce un error entonces el rectángulo
+  que se desea insertar ya pertenece al árbol original.
+  
+  Si no, el árbol original no contenía al rectángulo nuevo y el árbol 
+  resultante si lo contiene.
+ -}
+prop_member_insert :: RTree -> Rectangle -> Bool
+prop_member_insert t r = case (insert t r) of
+	Right tree -> (DS.member r (treeToSet tree)) && 
+					not (DS.member r (treeToSet t))
+	otherwise -> DS.member r $ treeToSet t
+
+
+{-
+  @prop_ord_insert@ representa una propiedad que debe cumplirse al 
+  insertar un rectángulo en un árbol.
+  
+  Si al insertar un rectángulo se produce un error entonces el rectángulo
+  que se desea insertar ya pertenece al árbol original.
+  
+  Si no, el nuevo rectángulo insertado estará detrás del rectángulo con 
+  mayor valor de Hilbert menor al suyo y antes del rectángulo cuyo número 
+  de Hilbert sea mayor o igual al suyo.
+ -}
+prop_ord_insert :: RTree -> Rectangle -> Bool
+prop_ord_insert t r = case (insert t r) of
+	Right tree -> if (not (DS.null (mayor tree)) && not (DS.null (menor tree)))
+		then (hilbval (DS.findMin (mayor tree)) >= hilbval r) &&
+			(hilbval (DS.findMax (menor tree)) < hilbval r)
+		else if (not (DS.null (mayor tree)))
+			then hilbval (DS.findMin (mayor tree)) >= hilbval r
+			else hilbval (DS.findMax (menor tree)) < hilbval r
+	otherwise -> DS.member r $ treeToSet t
+	where
+		menor = fst . DS.split r . treeToSet
+		mayor = snd . DS.split r . treeToSet
+
+
+{-
+  @prop_tall_delete@ representa una propiedad que debe cumplirse al eliminar
+  un rectángulo de un árbol.
+  
+  Eliminar un rectángulo inexistente genera error, sino la altura del árbol 
+  resultante es igual, o a lo sumo inferior por una unidad, a la altura del 
+  árbol antes de eliminar el rectángulo.
+ -}
+prop_tall_delete :: RTree -> Rectangle -> Bool
+prop_tall_delete t r = if (DS.member r (treeToSet t)) 
+	then snd (tall (head (rights [delete t r]))) <= snd (tall t)
+	else delete t r == throwError "RectangleNotFound"
+
+
+{-
+  @prop_member_delete@ representa una propiedad que debe cumplirse al 
+  eliminar un rectángulo de un árbol.
+  
+  Si al eliminar un rectángulo se produce un error entonces el rectángulo 
+  no se encuentra en el árbol.
+  
+  Si no, el árbol original contenía al rectángulo y el árbol resultante 
+  de la eliminación no lo contiene.
+ -}
+prop_member_delete :: RTree -> Rectangle -> Bool
+prop_member_delete t r = case (delete t r) of
+	Right tree -> not (DS.member r (treeToSet tree)) && 
+					(DS.member r (treeToSet t))
+	otherwise -> not $ DS.member r $ treeToSet t
+   -- q el eliminado ya no este
+	
+{-
+  @prop_search@ representa a la propiedad que debe cumplirse al buscar
+  solapamientos con un rectángulo en un árbol.
+  
+  Si al buscar un rectángulo se produce un Nothing quiere decir que el
+  rectángulo no se encontraba en el árbol.
+  
+  Si se produce una lista de solapamientos entonces dicha lista es un 
+  subconjunto del conjunto de rectángulos que conforman el árbol.
+ -}
+prop_search :: RTree -> Rectangle -> Bool
+prop_search t r = case (search t r) of
+	Just rs -> DS.isSubsetOf (DS.fromList rs) (treeToSet t)
+	Nothing -> not $ DS.isSubsetOf (DS.singleton r) (treeToSet t)
+
+
+
+
+--------------------------------------------------------------------------------
+
+
 -- ARBOL DE PRUEBA
 a = R {ul=(30,40), ll=(30,55), lr=(35,55), ur=(35,40)}
 b = R {ul=(20,15), ll=(20,25), lr=(30,25), ur=(30,15)}
@@ -333,38 +618,31 @@ overleaf = makeBranch $ DS.fromList [h1,h2,h3,h4,h5]
 
 
 
---------------------------------------------------------------
+
+-- ERROR QUICKCHECK
+
+arbolquick = (Branch {hv = 2270853427, 
+						mbr = R {ul = (8570,24581), ll = (8570,63848), lr = (65356,63848), ur = (65356,24581)}, 
+						childs = DS.fromList [
+							Leaf {hv = 2373404487, 
+									mbr = R {ul = (19335,24581), ll = (19335,54687), lr = (65356,54687), ur = (65356,24581)}, 
+									rects = DS.fromList [R {ul = (27160,29187), ll = (27160,34173), lr = (27783,34173), ur = (27783,29187)},R {ul = (28549,24581), ll = (28549,52342), lr = (49843,52342), ur = (49843,24581)},R {ul = (19335,37180), ll = (19335,45843), lr = (65356,45843), ur = (65356,37180)},R {ul = (56762,51914), ll = (56762,54687), lr = (58172,54687), ur = (58172,51914)}]},
+							Leaf {hv = 3124535267, 
+									mbr = R {ul = (8570,39185), ll = (8570,63848), lr = (64784,63848), ur = (64784,39185)}, 
+									rects = DS.fromList [R {ul = (63185,56100), ll = (63185,63848), lr = (64784,63848), ur = (64784,56100)},R {ul = (8570,39185), ll = (8570,46901), lr = (24846,46901), ur = (24846,39185)}]}]})
 
 
-search :: RTree -> Rectangle -> Maybe [Rectangle]
-search (Leaf _ _ rs) r =  if (null f)
-	then Nothing
-	else Just f
-	where
-		f :: [Rectangle]
-		f = F.toList $ DS.filter overlapped rs
-		overlapped :: Rectangle -> Bool
-		overlapped rec = (((fst (ul rec) < fst (ur r)) && 
-						(fst (ur r) <= fst (ur rec)) ||
-						(fst (ul rec) <= fst (ul r)) && 
-						(fst (ul r) < fst (ur rec))) &&
-						(((snd (ul rec) <= snd (ul r)) && 
-							(snd (ul r) < snd (ll rec))) || 
-							((snd (ul rec) < snd (ll r)) && 
-							(snd (ll r) <= snd (ll rec))))) ||
-						(((fst (ul r) < fst (ur rec)) && 
-						(fst (ur rec) <= fst (ur r)) ||
-						(fst (ul r) <= fst (ul rec)) && 
-						(fst (ul rec) < fst (ur r))) &&
-						(((snd (ul r) <= snd (ul rec)) && 
-							(snd (ul rec) < snd (ll r))) || 
-							((snd (ul r) < snd (ll rec)) && 
-							(snd (ll rec) <= snd (ll r)))))
-search (Branch _hv _rec trees) r = if (null g)
-	then Nothing
-	else Just g
-	where
-		g :: [Rectangle]
-		g = concat $ DM.catMaybes $ F.toList $ DS.map h trees
-		h :: RTree -> Maybe [Rectangle]
-		h tree = search tree r
+recquick = (R {ul = (22475,42128), ll = (22475,59797), lr = (30568,59797), ur = (30568,42128)})
+
+   
+arbdelete = (Leaf {hv = 1724648175, 
+					mbr = R {ul = (62824,9643), ll = (62824,37579), lr = (63224,37579), ur = (63224,9643)}, 
+					rects = DS.fromList [R {ul = (62824,9643), ll = (62824,37579), lr = (63224,37579), ur = (63224,9643)}]})
+recdelete = (R {ul = (34083,4600), ll = (34083,42536), lr = (52021,42536), ur = (52021,4600)})
+   
+   
+   
+   
+   --------------------------------------------------------------
+   
+   
