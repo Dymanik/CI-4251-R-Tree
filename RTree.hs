@@ -28,7 +28,7 @@ module RTree (
 	orderHV,
 		-- ** Agrega un nuevo rectángulo a la estructura. Insertar un
 		-- rectángulo duplicado es causa de error.
-	--insert,
+	insert,
 		-- ** Elimina un rectángulo presente en la estructura. Eliminar 
 		-- un rectángulo inexistente es causa de error.
 	delete,
@@ -38,6 +38,7 @@ module RTree (
 		-- la lista de rectángulos solapados.
 	search,
 		-- ** Construye un RTree a partir de una lista de rectángulos.
+	Point,
 	fromList,
 		-- ** Construye un Rectangle a partir de una lista de 8 enteros.
 	createRect	
@@ -55,6 +56,8 @@ import Test.QuickCheck
 
 -- Hilbert Value
 type HV = Int
+
+type Point = (Int,Int)
 
 {-
   El tipo de datos @Rectangle@ representa rectángulos de coordenadas 
@@ -644,5 +647,3 @@ recdelete = (R {ul = (34083,4600), ll = (34083,42536), lr = (52021,42536), ur = 
    
    
    --------------------------------------------------------------
-   
-   
