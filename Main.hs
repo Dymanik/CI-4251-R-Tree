@@ -144,7 +144,7 @@ mainLoop = do
 						liftIO $ putStrLn "Nothing found"
 						(lift $ put st{badSearches=badSearches(st)+1})
 					Just x -> do
-						liftIO $ putStrLn "found "
+						liftIO $ putStrLn $ "found "++show (length x)++" rectangles"
 						liftIO $ print $ take n x
 						(lift $ put st{goodSearches=goodSearches(st)+1})
 				stm <- lift get
@@ -155,7 +155,7 @@ mainLoop = do
 							(lift $ put stm{mbadSearches=mbadSearches(stm)+1})
 							mainLoop
 						Just x -> do
-							liftIO $ putStrLn "Modified database: found "
+							liftIO $ putStrLn $ "Modified database: found "++show (length x)++" rectangles"
 							liftIO $ print $ take n x
 							(lift $ put stm{mgoodSearches=mgoodSearches(stm)+1})
 							mainLoop
@@ -203,7 +203,7 @@ loadFile a = do
 		either (e) (ld) (parseRects f) where
 			ld rs = do
 				putStrLn ("Leidos "++show (length rs) ++" rectangulos desde el archivo "++head a)
-				return (fromList rs)
+				return (fromList' rs)
 			e err =do
 				putStrLn ("Error leyendo el archivo")
 				putStrLn $ show err

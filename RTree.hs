@@ -40,6 +40,7 @@ module RTree (
 		-- ** Construye un RTree a partir de una lista de rectángulos.
 	Point,
 	fromList,
+	fromList',
 		-- ** Construye un Rectangle a partir de una lista de 8 enteros.
 	createRect	
 ) 
@@ -83,6 +84,7 @@ data Rectangle = R {
 
 instance Ord Rectangle where
 	compare r1 r2 = orderHV r1 r2
+
 
 instance Arbitrary Rectangle where
 	arbitrary = do
@@ -239,10 +241,9 @@ makeBranch ls = Branch (hilbval br) (br) (ls)
   @raiseTree@ construye un árbol a partir de una lista de árboles.
  -}
 raiseTree ::  [RTree] -> RTree
-raiseTree ls  = case length ls of
-	0	-> Empty
-	1 	-> head ls
-	otherwise -> raiseTree $ roots ls where
+raiseTree []  = Empty
+raiseTree [t] = t
+raiseTree ls = raiseTree $ roots ls where
 		roots = roots' []
 		roots' res bs = case null bs of
 			True	  -> reverse res
@@ -262,6 +263,9 @@ fromList = raiseTree . leaves . DL.sortBy orderHV
 		leaves' res s  = leaves' ((makeLeaf $ DS.fromList rec) : res ) rest where
 			(rec,rest) = splitAt leafCapacity s
 
+fromList' ::  F.Foldable t => t Rectangle -> RTree
+fromList' = F.foldl' (f) Empty where
+	f t r = either (\x ->t) (id) (insert t r)
 
 ---------------------------------------------------------------------
 
@@ -398,40 +402,25 @@ delete (Branch _hv _rec trees) r = case g of
   devuelve nada.
   
   Si existen se devuelve una lista de todos los rectángulos solapados. 
- -}
-search :: RTree -> Rectangle -> Maybe [Rectangle]
-search (Leaf _ _ rs) r =  if (null f)
-	then Nothing
-	else Just f
-	where
-		f :: [Rectangle]
-		f = DS.toList $ DS.filter overlapped rs
-		overlapped :: Rectangle -> Bool
-		overlapped rec = (((fst (ul rec) < fst (ur r)) && 
-						(fst (ur r) <= fst (ur rec)) ||
-						(fst (ul rec) <= fst (ul r)) && 
-						(fst (ul r) < fst (ur rec))) &&
-						(((snd (ul rec) <= snd (ul r)) && 
-							(snd (ul r) < snd (ll rec))) || 
-							((snd (ul rec) < snd (ll r)) && 
-							(snd (ll r) <= snd (ll rec))))) ||
-						(((fst (ul r) < fst (ur rec)) && 
-						(fst (ur rec) <= fst (ur r)) ||
-						(fst (ul r) <= fst (ul rec)) && 
-						(fst (ul rec) < fst (ur r))) &&
-						(((snd (ul r) <= snd (ul rec)) && 
-							(snd (ul rec) < snd (ll r))) || 
-							((snd (ul r) < snd (ll rec)) && 
-							(snd (ll rec) <= snd (ll r)))))
-search (Branch _hv _rec trees) r = if (null g)
-	then Nothing
-	else Just g
-	where
-		g :: [Rectangle]
-		g = concat $ DM.catMaybes $ F.toList $ DS.map h trees
-		h :: RTree -> Maybe [Rectangle]
-		h tree = search tree r
+-}
 
+search ::  RTree -> Rectangle -> Maybe [Rectangle]
+search Empty _ = Nothing
+search (Leaf{rects=rs}) r
+	| DS.null rs  = Nothing
+	| otherwise = case (DS.toList $ DS.filter (intersects r) rs) of
+		[] -> Nothing
+		l -> return l
+search (Branch{childs=rs,mbr=br}) r
+	| intersects br r = F.foldMap (flip (search) r) rs 
+	| otherwise = Nothing
+
+
+intersects ::  Rectangle -> Rectangle -> Bool
+intersects r2 r1 = ( ll r1 > ll r2 && ll r1 < ur r2) ||
+				( lr r1 > ll r2 && lr r1 < ur r2) ||
+				( ul r1 > ll r2 && ul r1 < ur r2) ||
+				( ur r1 > ll r2 && ur r1 < ur r2) 
 
 ---------------------------------------------------------------------
 
