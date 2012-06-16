@@ -118,7 +118,7 @@ data RTree =
 	deriving (Show, Eq)
 
 instance Ord RTree where
-	compare t1 t2 =  case compare (hv t1) (hv t2) of
+	compare t1 t2 =  compare (hv t1) (hv t2)
 		
 
 instance Arbitrary RTree where
@@ -126,7 +126,7 @@ instance Arbitrary RTree where
 		rs <- suchThat (listOf1 $ (arbitrary :: Gen Rectangle)) f
 		return $ fromList rs
 		where
-			f xs = length xs > 100
+			f xs = length xs >= 0
 
 
 {- Error 
@@ -490,7 +490,8 @@ prop_tall_insert t r = if (DS.member r (treeToSet t))
 prop_member_insert :: RTree -> Rectangle -> Bool
 prop_member_insert t r = case (insert t r) of
 	Right tree -> (DS.member r (treeToSet tree)) && 
-					not (DS.member r (treeToSet t))
+					not (DS.member r (treeToSet t)) &&
+					(DS.insert r (treeToSet t)) == (treeToSet tree)
 	otherwise -> DS.member r $ treeToSet t
 
 
@@ -562,10 +563,25 @@ prop_member_delete t r = case (delete t r) of
  -}
 prop_search :: RTree -> Rectangle -> Bool
 prop_search t r = case (search t r) of
-	Just rs -> DS.isSubsetOf (DS.fromList rs) (treeToSet t)
-	Nothing -> not $ DS.isSubsetOf (DS.singleton r) (treeToSet t)
-
-
+	Just rs -> (DS.fromList rs) ==  inside
+	Nothing -> (DS.null inside) && (outside == rectSet)
+	where
+		(inside,outside)    = DS.partition (intersects r) (rectSet)
+		rectSet = treeToSet t
+test = do
+	putStrLn "member_insert"
+	quickCheck prop_member_insert
+	putStrLn "ord_insert"
+	quickCheck prop_ord_insert
+	putStrLn "tall insert"
+	quickCheck prop_tall_insert
+	putStrLn "search"
+	quickCheck prop_search
+	putStrLn "member delete"
+	quickCheck prop_member_delete
+	putStrLn "tall delete"
+	quickCheck prop_tall_delete
+	putStrLn "done"
 
 
 --------------------------------------------------------------------------------
@@ -641,6 +657,16 @@ arbdelete = (Leaf {hv = 1724648175,
 recdelete = (R {ul = (34083,4600), ll = (34083,42536), lr = (52021,42536), ur = (52021,4600)})
    
    
-   
+badsearch = Branch {hv = 2163890544, mbr = R {ul = (8538,2200), ll = (8538,65375), lr = (64756,65375), ur = (64756,2200)}, childs = DS.fromList [Branch {hv = 2164961162, mbr = R {ul = (10914,2200), ll = (10914,65375), lr = (64756,65375), ur = (64756,2200)}, childs = DS.fromList [Leaf {hv = 736612351, mbr = R {ul = (10914,2200), ll = (10914,50150), lr = (53343,50150), ur = (53343,2200)}, rects = DS.fromList [R {ul = (30972,2200), ll = (30972,50150), lr = (31700,50150), ur = (31700,2200)},R {ul = (10914,5297), ll = (10914,22188), lr = (44197,22188), ur = (44197,5297)},R {ul = (50657,7800), ll = (50657,19640), lr = (53343,19640), ur = (53343,7800)}]},Leaf {hv = 2114213099, mbr = R {ul = (16751,5990), ll = (16751,51820), lr = (58002,51820), ur = (58002,5990)}, rects = DS.fromList [R {ul = (29346,5990), ll = (29346,42695), lr = (50997,42695), ur = (50997,5990)},R {ul = (16751,40167), ll = (16751,48836), lr = (58002,48836), ur = (58002,40167)},R {ul = (38713,25855), ll = (38713,51820), lr = (53050,51820), ur = (53050,25855)}]},Leaf {hv = 2311542698, mbr = R {ul = (24781,27330), ll = (24781,65375), lr = (64756,65375), ur = (64756,27330)}, rects = DS.fromList [R {ul = (61073,27330), ll = (61073,44750), lr = (64756,44750), ur = (64756,27330)},R {ul = (44553,59009), ll = (44553,65375), lr = (52132,65375), ur = (52132,59009)},R {ul = (24781,45470), ll = (24781,59164), lr = (40852,59164), ur = (40852,45470)}]}]},Branch {hv = 3758273672, mbr = R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}, childs = DS.fromList [Leaf {hv = 3758273672, mbr = R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}, rects = DS.fromList [R {ul = (16806,39699), ll = (16806,55246), lr = (21230,55246), ur = (21230,39699)},R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}]}]}]}
+
+
+
+
+
+
+
+
+
+
    
    --------------------------------------------------------------
