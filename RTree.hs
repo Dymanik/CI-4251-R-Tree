@@ -42,7 +42,8 @@ module RTree (
 	fromList,
 	fromList',
 		-- ** Construye un Rectangle a partir de una lista de 8 enteros.
-	createRect	
+	makeRect4,
+	makeRect2
 ) 
 where
 
@@ -117,7 +118,8 @@ data RTree =
 	deriving (Show, Eq)
 
 instance Ord RTree where
-	compare t1 t2 = compare (hv t1) (hv t2)
+	compare t1 t2 =  case compare (hv t1) (hv t2) of
+		
 
 instance Arbitrary RTree where
 	arbitrary = do
@@ -152,13 +154,13 @@ splitPolicy = 2
   @nodeCapacity@ es un valor constante que indica cuantos subárboles 
   puede contener una rama.
  -}
-nodeCapacity = 5
+nodeCapacity = 3
 
 {-
   @leafCapacity@ es un valor constante que indica cuantos rectángulos 
   puede contener una hoja.
  -}
-leafCapacity = 4
+leafCapacity = 3
 
 
 {-
@@ -172,6 +174,7 @@ hilbval (R _ (llx,lly) _ (urx,ury)) =
 {-
   @hilbertValue@ calcula el valor o número de Hilbert para un punto 
   cualquiera.
+  http://www.serpentine.com/blog/2007/01/11/two-dimensional-spatial-hashing-with-space-filling-curves/
  -}
 hilbertValue :: (Bits a, Ord a) => Int -> (a,a) -> a
 hilbertValue d (x,y)
@@ -200,10 +203,14 @@ orderHV r1 r2 = compare (hilbval r1) (hilbval r2)
   @createRect@ permite construir un rectángulo a partir de una lista 
   de 8 enteros
  -}
-createRect :: [Int] -> Rectangle
-createRect [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
+makeRect4 :: [Int] -> Rectangle
+makeRect4 [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
 
 
+makeRect2 :: Point -> Point -> Rectangle
+makeRect2 l@(x0,y0) u@(x1,y1) 
+	| l<=u		 = R (x0,y1) (x0,y0) (x1,y0) (x1,y1)
+	| otherwise	 = R (x1,y0) (x1,y1) (x0,y1) (x0,y0)
 {-
   @boundingBox@ calcula el rectángulo que envuelve a una serie de 
   rectangulos.
@@ -358,11 +365,11 @@ insert (Branch _hv _rec trees) r = case (elegirTree trees) of
 {-
   @delete@ elimina un rectángulo de un árbol.
   
-  Si el rectángulo no se encuentra en el árbol se reporta un error
-  de rectángulo no encontrado.
-  
-  Si no, se devuelve el nuevo árbol.
- -}
+  Si el rectángulo se encuentra en el árbol se retorne un nuevo arbol
+  que no contiene al rectángulo. En caso contrario reporta un error de 
+  rectángulo no encontrado.
+
+-}
 delete :: RTree -> Rectangle -> Either String RTree
 delete Empty r = throwError "RectangleNotFound"
 delete (Leaf _hv _rec rs) r 
@@ -372,6 +379,7 @@ delete (Leaf _hv _rec rs) r
 	where
 		eliminado :: DS.Set Rectangle
 		eliminado = DS.delete r rs
+
 delete (Branch _hv _rec trees) r = case g of
 	(null, Nothing) -> throwError "RectangleNotFound"
 	([newTree], Just oldTree) -> Right $ noBranch $ rearmar newTree oldTree
