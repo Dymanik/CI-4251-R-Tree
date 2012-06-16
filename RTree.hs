@@ -93,7 +93,7 @@ instance Arbitrary Rectangle where
 		y0 <- choose (0,65535)
 		x1 <- choose (x0,65536)
 		y1 <- choose (y0,65536)
-		return $ R (x0,y0) (x0,y1) (x1,y1) (x1,y0)
+		return $ R (x0,y1) (x0,y0) (x1,y0) (x1,y1)
 
 
 {-
@@ -126,7 +126,7 @@ instance Arbitrary RTree where
 		rs <- suchThat (listOf1 $ (arbitrary :: Gen Rectangle)) f
 		return $ fromList rs
 		where
-			f xs = length xs >= 0
+		f xs = length xs >= 0
 
 
 {- Error 
@@ -220,7 +220,7 @@ boundingBox = F.foldr1 f
 	where 
 		f r1 r2 = buildR (g (ul r1) (ul r2) (lr r1) (lr r2)) 
 		g (x10,y10) (x20,y20) (x11,y11) (x21,y21) = 
-			(min x10 x20, min y10 y20, max x11 x21, max y11 y21)
+			(min x10 x20, max y10 y20, max x11 x21, min y11 y21)
 		buildR (x0,y0,x1,y1) = R (x0,y0) (x0,y1) (x1,y1) (x1,y0)
 
 
@@ -413,22 +413,62 @@ delete (Branch _hv _rec trees) r = case g of
 -}
 
 search ::  RTree -> Rectangle -> Maybe [Rectangle]
-search Empty _ = Nothing
-search (Leaf{rects=rs}) r
+search Empty _r = Nothing
+search (Leaf _hv _rec rs) r
 	| DS.null rs  = Nothing
 	| otherwise = case (DS.toList $ DS.filter (intersects r) rs) of
 		[] -> Nothing
 		l -> return l
-search (Branch{childs=rs,mbr=br}) r
-	| intersects br r = F.foldMap (flip (search) r) rs 
+search (Branch _hv br rs) r
+	| intersects r br = case find of
+		[] -> Nothing
+		l -> return l
 	| otherwise = Nothing
+	where
+		find = concat $ DM.catMaybes $ DS.toList $ DS.map (flip (search) r) rs
 
 
 intersects ::  Rectangle -> Rectangle -> Bool
-intersects r2 r1 = ( ll r1 > ll r2 && ll r1 < ur r2) ||
+intersects a b = 
+	((bx0 < ax1 && ax1 <= bx1) && ((by0 <= ay0 && ay0 < by1) || (by0 < ay1 && ay1 <= by1))) ||
+	((by0 < ay1 && ay1 <= by1) && ((bx0 <= ax0 && ax0 < bx1) || (bx0 < ax1 && ax1 <= bx1)))
+	where
+		ax0 = fst $ ll a
+		bx0 = fst $ ll b
+		ax1 = fst $ ur a
+		bx1 = fst $ ur b
+		ay0 = snd $ ll a
+		by0 = snd $ ll b
+		ay1 = snd $ ur a
+		by1 = snd $ ur b
+	
+	
+	{-(fst (ll r1) >= fst (ll r2) && snd (ll r1) >= snd (ll r2) && fst (ll r1) < fst (ur r2) && snd (ll r1) < snd (ur r2)) ||
+	(fst (lr r1) <= fst (ll r2) && snd (lr r1) >= snd (ll r2) && fst (lr r1) > fst (ul r2) && snd (lr r1) < snd (ul r2)) ||
+	(fst (ul r1) >= fst (ul r2) && snd (ul r1) <= snd (ul r2) && fst (ul r1) < fst (lr r2) && snd (ul r1) > snd (lr r2)) ||
+	(fst (ur r1) >= fst (ll r2) && snd (ur r1) >= snd (ll r2) && fst (ur r1) < fst (ul r2) && snd (ur r1) < snd (ul r2))-}
+	
+	{-(((fst (ul r2) < fst (ur r1)) && 
+						(fst (ur r1) <= fst (ur r2)) ||
+						(fst (ul r2) <= fst (ul r1)) && 
+						(fst (ul r1) < fst (ur r2))) &&
+						(((snd (ul r2) <= snd (ul r1)) && 
+							(snd (ul r1) < snd (ll r2))) || 
+							((snd (ul r2) < snd (ll r1)) && 
+							(snd (ll r1) <= snd (ll r2))))) ||
+						(((fst (ul r1) < fst (ur r2)) && 
+						(fst (ur r2) <= fst (ur r1)) ||
+						(fst (ul r1) <= fst (ul r2)) && 
+						(fst (ul r2) < fst (ur r1))) &&
+						(((snd (ul r1) <= snd (ul r2)) && 
+							(snd (ul r2) < snd (ll r1))) || 
+							((snd (ul r1) < snd (ll r2)) && 
+							(snd (ll r2) <= snd (ll r1)))))-}
+	
+	{-( ll r1 > ll r2 && ll r1 < ur r2) ||
 				( lr r1 > ll r2 && lr r1 < ur r2) ||
 				( ul r1 > ll r2 && ul r1 < ur r2) ||
-				( ur r1 > ll r2 && ur r1 < ur r2) 
+				( ur r1 > ll r2 && ur r1 < ur r2) -}
 
 ---------------------------------------------------------------------
 
@@ -566,8 +606,10 @@ prop_search t r = case (search t r) of
 	Just rs -> (DS.fromList rs) ==  inside
 	Nothing -> (DS.null inside) && (outside == rectSet)
 	where
-		(inside,outside)    = DS.partition (intersects r) (rectSet)
+		(inside,outside) = DS.partition (intersects r) (rectSet)
 		rectSet = treeToSet t
+
+
 test = do
 	putStrLn "member_insert"
 	quickCheck prop_member_insert
@@ -588,20 +630,20 @@ test = do
 
 
 -- ARBOL DE PRUEBA
-a = R {ul=(30,40), ll=(30,55), lr=(35,55), ur=(35,40)}
-b = R {ul=(20,15), ll=(20,25), lr=(30,25), ur=(30,15)}
-c = R {ul=(30,40), ll=(30,55), lr=(35,55), ur=(35,40)}
-d = R {ul=(33,30), ll=(33,43), lr=(37,43), ur=(37,30)}
-a2 = R {ul=(10,5), ll=(10,80), lr=(50,80), ur=(50,5)}
-no = R {ul=(30,15), ll=(30,25), lr=(40,25), ur=(40,15)}
-enlos2 = R (10,30) (10,80) (72,80) (72,30)
+a = R {ll=(30,40), ul=(30,55), ur=(35,55), lr=(35,40)}
+b = R {ll=(20,15), ul=(20,25), ur=(30,25), lr=(30,15)}
+c = R {ll=(30,40), ul=(30,55), ur=(35,55), lr=(35,40)}
+d = R {ll=(33,30), ul=(33,43), ur=(37,43), lr=(37,30)}
+a2 = R {ll=(10,5), ul=(10,80), ur=(50,80), lr=(50,5)}
+no = R {ll=(30,15), ul=(30,25), ur=(40,25), lr=(40,15)}
+enlos2 = R (10,80) (10,30) (72,30) (72,80)
 hoja1 = makeLeaf (DS.fromList [b,d,c])
-papa1 = R {ul=(10,5), ll=(10,80), lr=(50,80), ur=(50,5)}
-x = R {ul=(65,50), ll=(65,55), lr=(70,55), ur=(70,50)}
-y = R {ul=(75,40), ll=(75,50), lr=(80,50), ur=(80,40)}
+papa1 = R {ll=(10,5), ul=(10,80), ur=(50,80), lr=(50,5)}
+x = R {ll=(65,50), ul=(65,55), ur=(70,55), lr=(70,50)}
+y = R {ll=(75,40), ul=(75,50), ur=(80,50), lr=(80,40)}
 hoja2 = makeLeaf (DS.fromList [x,y])
-papa2 = R {ul=(40,30), ll=(40,90), lr=(90,90), ur=(90,30)}
-papa = R (0,0) (0,100) (100,100) (100,0)
+papa2 = R {ll=(40,30), ul=(40,90), ur=(90,90), lr=(90,30)}
+papa = R (0,100) (0,0) (100,0) (100,100)
 arbolp = makeBranch (DS.fromList [
 	makeBranch (DS.fromList [hoja1]),
 	makeBranch (DS.fromList [hoja2])])
@@ -657,16 +699,93 @@ arbdelete = (Leaf {hv = 1724648175,
 recdelete = (R {ul = (34083,4600), ll = (34083,42536), lr = (52021,42536), ur = (52021,4600)})
    
    
-badsearch = Branch {hv = 2163890544, mbr = R {ul = (8538,2200), ll = (8538,65375), lr = (64756,65375), ur = (64756,2200)}, childs = DS.fromList [Branch {hv = 2164961162, mbr = R {ul = (10914,2200), ll = (10914,65375), lr = (64756,65375), ur = (64756,2200)}, childs = DS.fromList [Leaf {hv = 736612351, mbr = R {ul = (10914,2200), ll = (10914,50150), lr = (53343,50150), ur = (53343,2200)}, rects = DS.fromList [R {ul = (30972,2200), ll = (30972,50150), lr = (31700,50150), ur = (31700,2200)},R {ul = (10914,5297), ll = (10914,22188), lr = (44197,22188), ur = (44197,5297)},R {ul = (50657,7800), ll = (50657,19640), lr = (53343,19640), ur = (53343,7800)}]},Leaf {hv = 2114213099, mbr = R {ul = (16751,5990), ll = (16751,51820), lr = (58002,51820), ur = (58002,5990)}, rects = DS.fromList [R {ul = (29346,5990), ll = (29346,42695), lr = (50997,42695), ur = (50997,5990)},R {ul = (16751,40167), ll = (16751,48836), lr = (58002,48836), ur = (58002,40167)},R {ul = (38713,25855), ll = (38713,51820), lr = (53050,51820), ur = (53050,25855)}]},Leaf {hv = 2311542698, mbr = R {ul = (24781,27330), ll = (24781,65375), lr = (64756,65375), ur = (64756,27330)}, rects = DS.fromList [R {ul = (61073,27330), ll = (61073,44750), lr = (64756,44750), ur = (64756,27330)},R {ul = (44553,59009), ll = (44553,65375), lr = (52132,65375), ur = (52132,59009)},R {ul = (24781,45470), ll = (24781,59164), lr = (40852,59164), ur = (40852,45470)}]}]},Branch {hv = 3758273672, mbr = R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}, childs = DS.fromList [Leaf {hv = 3758273672, mbr = R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}, rects = DS.fromList [R {ul = (16806,39699), ll = (16806,55246), lr = (21230,55246), ur = (21230,39699)},R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}]}]}]}
+badsearch = Branch {hv = 2163890544, mbr = R {ul = (8538,2200), ll = (8538,65375), lr = (64756,65375), ur = (64756,2200)}, childs = DS.fromList [Branch {hv = 2164961162, mbr = R {ul = (10914,2200), ll = (10914,65375), lr = (64756,65375), ur = (64756,2200)}, childs = DS.fromList [Leaf {hv = 736612351, mbr = R {ul = (10914,2200), ll = (10914,50150), lr = (53343,50150), ur = (53343,2200)}, rects = DS.fromList [R {ul = (30972,2200), ll = (30972,50150), lr = (31700,50150), ur = (31700,2200)},R {ul = (10914,5297), ll = (10914,22188), lr = (44197,22188), ur = (44197,5297)},R {ul = (50657,7800), ll = (50657,19640), lr = (53343,19640), ur = (53343,7800)}]},Leaf {hv = 2114213099, mbr = R {ul = (16751,5990), ll = (16751,51820), lr = (58002,51820), ur = (58002,5990)}, rects = DS.fromList [R {ul = (29346,5990), ll = (29346,42695), lr = (50997,42695), ur = (50997,5990)},R {ul = (16751,40167), ll = (16751,48836), lr = (58002,48836), ur = (58002,40167)},R {ul = (38713,25855), ll = (38713,51820), lr = (53050,51820), ur = (
+53050,25855)}]},Leaf {hv = 2311542698, mbr = R {ul = (24781,27330), ll = (24781,65375), lr = (64756,65375), ur = (64756,27330)}, rects = DS.fromList [R {ul = (61073,27330), ll = (61073,44750), lr = (64756,44750), ur = (64756,27330)},R {ul = (44553,59009), ll = (44553,65375), lr = (52132,65375), ur = (52132,59009)},R {ul = (24781,45470), ll = (24781,59164), lr = (40852,59164), ur = (40852,45470)}]}]},Branch {hv = 3758273672, mbr = R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}, childs = DS.fromList [Leaf {hv = 3758273672, mbr = R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}, rects = DS.fromList [R {ul = (16806,39699), ll = (16806,55246), lr = (21230,55246), ur = (21230,39699)},R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}]}]}]}
+
+
+
+asearch = Branch {hv = 2152621967, 
+	mbr = R {ul = (703,65425), ll = (703,5279), lr = (65176,5279), ur = (65176,65425)}, 
+	childs = DS.fromList [
+	Branch {hv = 2152621967,
+		mbr = R {ul = (703,65425), ll = (703,5279), lr = (65176,5279), ur = (65176,65425)}, 
+		childs = DS.fromList [
+		Branch {hv = 2082262462, 
+			mbr = R {ul = (3208,45486), ll = (3208,5279), lr = (65176,5279), ur = (65176,45486)}, 
+			childs = DS.fromList [
+			Leaf {hv = 801148457, 
+				mbr = R {ul = (3208,31245), ll = (3208,5279), lr = (62055,5279), ur = (62055,31245)}, 
+				rects = DS.fromList [
+				R {ul = (16627,31036), ll = (16627,5279), lr = (29241,5279), ur = (29241,31036)},
+				R {ul = (3208,31245), ll = (3208,11196), lr = (62055,11196), ur = (62055,31245)},
+				R {ul = (10585,14018), ll = (10585,8613), lr = (42429,8613), ur = (42429,14018)}]},
+			Leaf {hv = 1245691272, 
+				mbr = R {ul = (25926,22399), ll = (25926,5963), lr = (64228,5963), ur = (64228,22399)}, 
+				rects = DS.fromList [
+				R {ul = (25926,8027), ll = (25926,5963), lr = (43606,5963), ur = (43606,8027)},
+				R {ul = (32012,13673), ll = (32012,8286), lr = (63635,8286), ur = (63635,13673)},
+				R {ul = (64126,22399), ll = (64126,9964), lr = (64228,9964), ur = (64228,22399)}]},
+			Leaf {hv = 1807656142, 
+				mbr = R {ul = (49625,45486), ll = (49625,14966), lr = (65176,14966), ur = (65176,45486)}, 
+				rects = DS.fromList [
+				R {ul = (52487,22323), ll = (52487,17093), lr = (58775,17093), ur = (58775,22323)},
+				R {ul = (64156,45486), ll = (64156,14966), lr = (65176,14966), ur = (65176,45486)},
+				R {ul = (49625,37315), ll = (49625,25670), lr = (51163,25670), ur = (51163,37315)}]}]},
+		Branch {hv = 2288552396, 
+			mbr = R {ul = (24482,65172), ll = (24482,20164), lr = (64970,20164), ur = (64970,65172)}, 
+			childs = DS.fromList [
+			Leaf {hv = 2363047375, 
+				mbr = R {ul = (36251,54086), ll = (36251,24808), lr = (57661,24808), ur = (57661,54086)}, 
+				rects = DS.fromList [
+				R {ul = (36251,35120), ll = (36251,31424), lr = (54985,31424), ur = (54985,35120)},
+				R {ul = (49371,54086), ll = (49371,24808), lr = (56608,24808), ur = (56608,54086)},
+				R {ul = (54451,48255), ll = (54451,35201), lr = (57661,35201), ur = (57661,48255)}]},
+			Leaf {hv = 2380811142, 
+				mbr = R {ul = (24482,56709), ll = (24482,20164), lr = (64970,20164), ur = (64970,56709)}, 
+				rects = DS.fromList [
+				R {ul = (24482,38795), ll = (24482,20164), lr = (64970,20164), ur = (64970,38795)},
+				R {ul = (26529,56088), ll = (26529,37516), lr = (39211,37516), ur = (39211,56088)},
+				R {ul = (35567,56709), ll = (35567,24992), lr = (47979,24992), ur = (47979,56709)}]},
+			Leaf {hv = 2909293577, 
+				mbr = R {ul = (46325,65172), ll = (46325,50482), lr = (64911,50482), ur = (64911,65172)}, 
+				rects = DS.fromList [
+				R {ul = (56673,63984), ll = (56673,50482), lr = (57931,50482), ur = (57931,63984)},
+				R {ul = (59116,63530), ll = (59116,56823), lr = (64911,56823), ur = (64911,63530)},
+				R {ul = (46325,65172), ll = (46325,64045), lr = (47353,64045), ur = (47353,65172)}]}]},
+		Branch {hv = 3491171403, 
+			mbr = R {ul = (703,65425), ll = (703,31895), lr = (61372,31895), ur = (61372,65425)}, 
+			childs = DS.fromList [
+			Leaf {hv = 3099279636, 
+				mbr = R {ul = (16162,56718), ll = (16162,51301), lr = (61372,51301), ur = (61372,56718)}, 
+				rects = DS.fromList [
+				R {ul = (39963,56061), ll = (39963,55248), lr = (51496,55248), ur = (51496,56061)},
+				R {ul = (31687,56718), ll = (31687,51301), lr = (53588,51301), ur = (53588,56718)},
+				R {ul = (16162,56355), ll = (16162,55886), lr = (61372,55886), ur = (61372,56355)}]},
+			Leaf {hv = 3175606876, 
+				mbr = R {ul = (19029,65138), ll = (19029,50824), lr = (59794,50824), ur = (59794,65138)}, 
+				rects = DS.fromList [
+				R {ul = (30262,52035), ll = (30262,50824), lr = (39189,50824), ur = (39189,52035)},	
+				R {ul = (19029,65138), ll = (19029,63654), lr = (59794,63654), ur = (59794,65138)},	
+				R {ul = (30477,64764), ll = (30477,64506), lr = (47170,64506), ur = (47170,64764)}]},
+			Leaf {hv = 3506542435, 
+				mbr = R {ul = (703,65425), ll = (703,31895), lr = (56348,31895), ur = (56348,65425)}, 
+				rects = DS.fromList [
+				R {ul = (18827,65425), ll = (18827,61928), lr = (41093,61928), ur = (41093,65425)},
+				R {ul = (3708,36288), ll = (3708,31895), lr = (56348,31895), ur = (56348,36288)},
+				R {ul = (703,64289), ll = (703,48412), lr = (4569,48412), ur = (4569,64289)}]}]}]},
+		Branch {hv = 4173837034, 
+			mbr = R {ul = (4532,63340), ll = (4532,54371), lr = (19370,54371), ur = (19370,63340)}, 
+			childs = DS.fromList [
+			Branch {hv = 4173837034, 
+				mbr = R {ul = (4532,63340), ll = (4532,54371), lr = (19370,54371), ur = (19370,63340)}, 
+				childs = DS.fromList [
+				Leaf {hv = 4173837034, 
+					mbr = R {ul = (4532,63340), ll = (4532,54371), lr = (19370,54371), ur = (19370,63340)}, 
+					rects = DS.fromList [
+					R {ul = (4532,63340), ll = (4532,54371), lr = (19370,54371), ur = (19370,63340)}]}]}]}]}
+rsearch = R {ul = (325,4812), ll = (325,1760), lr = (55846,1760), ur = (55846,4812)}
 
 
 
 
-
-
-
-
-
-
-   
    --------------------------------------------------------------
