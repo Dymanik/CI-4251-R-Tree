@@ -54,7 +54,9 @@ import Data.Either
 import Control.Monad.Error
 import Test.QuickCheck
 
--- Hilbert Value.
+{-
+  Número de Hilbert para el centro de un rectángulo.
+ -}
 type HV = Int
 
 {-
@@ -69,7 +71,7 @@ type Point = (Int,Int)	-- ^ (X,Y)
   Se declara derivando de @Show@ para facilitar la depuración
   y la creación de rectángulos "manualmente".
 
-  Se declara derivando de @Eq@ pues en la implantación interna
+  Se declara instancia de @Eq@ pues en la implantación interna
   del R-Tree es necesario comparar rectángulos.
   
   Se declara instancia de @Ord@ pues es necesario ordenar rectángulos.
@@ -126,14 +128,16 @@ data RTree =
 	deriving (Show, Eq)
 
 instance Ord RTree where
-	compare t1 t2 =  compare (hv t1) (hv t2)
+	compare t1 t2
+		| (hv t1) == (hv t2) = orderPoint (mbr t1) (mbr t2)
+		| otherwise = compare (hv t1) (hv t2)
 
 instance Arbitrary RTree where
 	arbitrary = do
-		rs <- {-suchThat (-}listOf1 $ (arbitrary :: Gen Rectangle){-) f-}
+		rs <- suchThat (listOf1 $ (arbitrary :: Gen Rectangle)) f
 		return $ fromList rs
-		{-where
-		f xs = length xs >= 0 && length <= 1000-}
+		where
+			f xs = length xs >= 0 && length xs <= 1000
 
 
 {- Error 
@@ -284,7 +288,7 @@ raiseTree ls = raiseTree $ roots ls where
 		roots' res bs
 			| null bs = reverse res
 			| otherwise =
-				roots' ((makeBranch (DS.fromList(child))) : res) rest where
+				roots' ((makeBranch (DS.fromList(child))):res) rest where
 				(child,rest) = splitAt nodeCapacity bs
 
 
@@ -296,7 +300,7 @@ fromList = raiseTree . leaves . DL.sortBy orderHV
 	where 
 		leaves  = leaves' [] 
 		leaves' res [] = reverse res
-		leaves' res s  = leaves' ((makeLeaf (DS.fromList rec)) : res ) rest where
+		leaves' res s  = leaves' ((makeLeaf (DS.fromList rec)):res ) rest where
 			(rec,rest) = splitAt leafCapacity s
 
 {-|
@@ -553,10 +557,10 @@ prop_member_insert t r = case (insert t r) of
 prop_ord_insert :: RTree -> Rectangle -> Bool
 prop_ord_insert t r = case (insert t r) of
 	Right tree -> if (not (DS.null (mayor tree)) && not (DS.null (menor tree)))
-		then (hilbval (DS.findMin (mayor tree)) > hilbval r) &&
+		then (hilbval (DS.findMin (mayor tree)) >= hilbval r) &&
 			(hilbval (DS.findMax (menor tree)) <= hilbval r)
 		else if (not (DS.null (mayor tree)))
-			then hilbval (DS.findMin (mayor tree)) > hilbval r
+			then hilbval (DS.findMin (mayor tree)) >= hilbval r
 			else hilbval (DS.findMax (menor tree)) <= hilbval r
 	otherwise -> DS.member r $ treeToSet t
 	where
@@ -713,6 +717,8 @@ a2insert = Branch {hv = 653, mbr = R {ul = (2,50), ll = (2,2), lr = (49,2), ur =
 Leaf {hv = 564, mbr = R {ul = (2,41), ll = (2,2), lr = (37,2), ur = (37,41)}, rects = DS.fromList [R {ul = (5,30), ll = (5,15), lr = (37,15), ur = (37,30)},R {ul = (2,41), ll = (2,2), lr = (33,2), ur = (33,41)},R {ul = (8,29), ll = (8,23), lr = (32,23), ur = (32,29)}]},
 Leaf {hv = 2105, mbr = R {ul = (17,50), ll = (17,23), lr = (49,23), ur = (49,50)}, rects = DS.fromList [R {ul = (44,36), ll = (44,23), lr = (46,23), ur = (46,36)},R {ul = (30,50), ll = (30,28), lr = (41,28), ur = (41,50)},R {ul = (17,50), ll = (17,36), lr = (49,36), ur = (49,50)},R {ul = (34,37), ll = (34,30), lr = (47,30), ur = (47,37)}]},
 Leaf {hv = 3404, mbr = R {ul = (20,44), ll = (20,29), lr = (41,29), ur = (41,44)}, rects = DS.fromList [R {ul = (39,43), ll = (39,42), lr = (41,42), ur = (41,43)},R {ul = (20,44), ll = (20,29), lr = (35,29), ur = (35,44)}]}]}
+
+
 
 maphilbval = DS.map hilbval (treeToSet ainsert)
 
