@@ -3,7 +3,7 @@
 
   Programación Funcional Avanzada (CI4251)
 
-  0.1 2012-06-14
+  0.1 2012-06-17
 
 
   Johan González	07-40979
@@ -24,7 +24,7 @@ module RTree (
 		-- ** Árbol de almacenamiento y consulta de rectángulos.
 	RTree (..),
 		-- ** Punto en el espacio de coordenadas X y Y.
-	Point,
+	Point (..),
 	-- * Funciones exportadas.
 		-- ** Permite la comparación de dos rectángulos según su número de Hilbert
 	orderHV,
@@ -57,8 +57,10 @@ import Test.QuickCheck
 -- Hilbert Value.
 type HV = Int
 
--- Punto en el espacio de coordenadas X y Y.
-type Point = (Int,Int)
+{-
+  Punto en el espacio de coordenadas X y Y.
+ -}
+type Point = (Int,Int)	-- ^ (X,Y)
 
 {-
   El tipo de datos @Rectangle@ representa rectángulos de coordenadas 
@@ -83,15 +85,16 @@ data Rectangle = R {
 } deriving (Show)
 
 instance Eq Rectangle where
-	a == b = (ul a == ul b) && (ll a == ll b) && (lr a == lr b) && (ur a == ur b)
+	a == b = 
+		(ul a == ul b) && (ll a == ll b) && (lr a == lr b) && (ur a == ur b)
 
 instance Ord Rectangle where
 	compare r1 r2
 		| (hilbval r1) == (hilbval r2) = orderPoint r1 r2
 		| otherwise = orderHV r1 r2
 
--- No se generan valores de todo el rango posible (0 a 65536) para aumentar
--- la posibilidad de coincidencias entre rectángulos.
+-- No se generan valores dentro de todo el rango posible (0 a 65536) 
+-- para aumentar la posibilidad de coincidencias entre rectángulos.
 instance Arbitrary Rectangle where
 	arbitrary = do
 		x0 <- choose (0,49)
@@ -195,7 +198,7 @@ hilbertValue d (x,y)
 				where step = dist (side `shiftR` 1) (area `shiftR` 2)
 
 
-{- 
+{-|
   @orderHV@ establece la comparación de dos rectangulos segun su número 
   de Hilbert.
  -}
@@ -219,7 +222,7 @@ orderPoint r1 r2 = compare (ax0,ay0,ax0,ax1) (bx0,by0,bx0,bx1)
 		by1 = snd (ur r2)
 
 
-{-
+{-|
   @makeRect4@ permite construir un rectángulo a partir de una lista 
   de 8 enteros.
  -}
@@ -227,7 +230,7 @@ makeRect4 :: [Int] -> Rectangle
 makeRect4 [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
 
 
-{-
+{-|
   @makeRect2@ permite construir un rectángulo a partir de 2 puntos en
   el espacio.
  -}
@@ -285,7 +288,7 @@ raiseTree ls = raiseTree $ roots ls where
 				(child,rest) = splitAt nodeCapacity bs
 
 
-{-
+{-|
   @fromList@ construye un árbol a partir de una lista de rectángulos.
  -}
 fromList ::  [Rectangle] -> RTree
@@ -296,11 +299,14 @@ fromList = raiseTree . leaves . DL.sortBy orderHV
 		leaves' res s  = leaves' ((makeLeaf (DS.fromList rec)) : res ) rest where
 			(rec,rest) = splitAt leafCapacity s
 
+{-|
+  @fromList'@  contruye un árbol a partir de un conjunto de rectángulos
+  utilizando la operación de @insert@.
+ -}
 fromList' ::  F.Foldable t => t Rectangle -> RTree
 fromList' = F.foldl' (f) Empty where
 	f t r = either (\x ->t) (id) (insert t r)
 
----------------------------------------------------------------------
 
 {- 
   @overflow@ determina si ocurre overflow en el árbol luego de insertar
@@ -357,7 +363,7 @@ overflowHandling :: RTree -> RTree
 overflowHandling (Branch _hv _rec ts) = overflow (DS.findMin ts) ts
 
 
-{- 
+{-|
   @insert@ inserta un rectángulo en un árbol.
   
   Si el rectángulo ya se encuentra en el árbol se reporta un error
@@ -386,12 +392,13 @@ insert (Branch _hv _rec trees) r = case (elegirTree trees) of
 		f tree = hv tree < hilbval r
 
 
-{-
+{-|
   @delete@ elimina un rectángulo de un árbol.
   
   Si el rectángulo se encuentra en el árbol se retorne un nuevo arbol
-  que no contiene al rectángulo. En caso contrario reporta un error de 
-  rectángulo no encontrado.
+  que no contiene al rectángulo. 
+  
+  En caso contrario reporta un error de rectángulo no encontrado.
 
 -}
 delete :: RTree -> Rectangle -> Either String RTree
@@ -426,7 +433,7 @@ delete (Branch _hv _rec trees) r = case g of
 
 
 
-{-
+{-|
   @search@ busca todos los rectángulos que se solapen con un 
   rectángulo dado.
   
@@ -546,11 +553,11 @@ prop_member_insert t r = case (insert t r) of
 prop_ord_insert :: RTree -> Rectangle -> Bool
 prop_ord_insert t r = case (insert t r) of
 	Right tree -> if (not (DS.null (mayor tree)) && not (DS.null (menor tree)))
-		then (hilbval (DS.findMin (mayor tree)) >= hilbval r) &&
-			(hilbval (DS.findMax (menor tree)) < hilbval r)
+		then (hilbval (DS.findMin (mayor tree)) > hilbval r) &&
+			(hilbval (DS.findMax (menor tree)) <= hilbval r)
 		else if (not (DS.null (mayor tree)))
-			then hilbval (DS.findMin (mayor tree)) >= hilbval r
-			else hilbval (DS.findMax (menor tree)) < hilbval r
+			then hilbval (DS.findMin (mayor tree)) > hilbval r
+			else hilbval (DS.findMax (menor tree)) <= hilbval r
 	otherwise -> DS.member r $ treeToSet t
 	where
 		menor = fst . DS.split r . treeToSet
@@ -708,3 +715,12 @@ Leaf {hv = 2105, mbr = R {ul = (17,50), ll = (17,23), lr = (49,23), ur = (49,50)
 Leaf {hv = 3404, mbr = R {ul = (20,44), ll = (20,29), lr = (41,29), ur = (41,44)}, rects = DS.fromList [R {ul = (39,43), ll = (39,42), lr = (41,42), ur = (41,43)},R {ul = (20,44), ll = (20,29), lr = (35,29), ur = (35,44)}]}]}
 
 maphilbval = DS.map hilbval (treeToSet ainsert)
+
+
+
+
+
+arbinsert = Branch {hv = 726, mbr = R {ul = (2,45), ll = (2,0), lr = (46,0), ur = (46,45)}, childs = DS.fromList [Leaf {hv = 643, mbr = R {ul = (5,45), ll = (5,3), lr = (46,3), ur = (46,45)}, rects = DS.fromList [R {ul = (19,4), ll = (19,3), lr = (34,3), ur = (34,4)},R {ul = (5,42), ll = (5,22), lr = (46,22), ur = (46,42)},R {ul = (17,45), ll = (17,43), lr = (27,43), ur = (27,45)}]},Leaf {hv = 832, mbr = R {ul = (2,30), ll = (2,0), lr = (44,0), ur = (44,30)}, rects = DS.fromList [R {ul = (2,12), ll = (2,9), lr = (14,9), ur = (14,12)},R {ul = (19,30), ll = (19,11), lr = (44,11), ur = (44,30)},R {ul = (17,3), ll = (17,0), lr = (30,0), ur = (30,3)}]}]}
+recinsert = R {ul = (33,49), ll = (33,47), lr = (48,47), ur = (48,49)}
+
+resinsert = Branch {hv = 643, mbr = R {ul = (2,49), ll = (2,0), lr = (48,0), ur = (48,49)}, childs = DS.fromList [Leaf {hv = 832, mbr = R {ul = (2,30), ll = (2,0), lr = (44,0), ur = (44,30)}, rects = DS.fromList [R {ul = (2,12), ll = (2,9), lr = (14,9), ur = (14,12)},R {ul = (19,30), ll = (19,11), lr = (44,11), ur = (44,30)},R {ul = (17,3), ll = (17,0), lr = (30,0), ur = (30,3)}]},Leaf {hv = 2922, mbr = R {ul = (33,49), ll = (33,47), lr = (48,47), ur = (48,49)}, rects = DS.fromList [R {ul = (33,49), ll = (33,47), lr = (48,47), ur = (48,49)}]}]}
