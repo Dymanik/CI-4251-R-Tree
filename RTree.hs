@@ -7,6 +7,7 @@
 
 
   Johan González	07-40979
+  
   Andreina García	08-10406
 
 
@@ -22,27 +23,24 @@ module RTree (
 	Rectangle (..),
 		-- ** Árbol de almacenamiento y consulta de rectángulos.
 	RTree (..),
+		-- ** Punto en el espacio de coordenadas X y Y.
+	Point,
 	-- * Funciones exportadas.
-		-- ** Permite la comparación de dos rectángulos según su número 
-		-- de Hilbert
+		-- ** Permite la comparación de dos rectángulos según su número de Hilbert
 	orderHV,
-		-- ** Agrega un nuevo rectángulo a la estructura. Insertar un
-		-- rectángulo duplicado es causa de error.
+		-- ** Agrega un nuevo rectángulo a la estructura. Insertar un rectángulo duplicado es causa de error.
 	insert,
-		-- ** Elimina un rectángulo presente en la estructura. Eliminar 
-		-- un rectángulo inexistente es causa de error.
+		-- ** Elimina un rectángulo presente en la estructura. Eliminar un rectángulo inexistente es causa de error.
 	delete,
-		-- ** Consulta la estructura para determinar si el rectángulo 
-		-- suministrado como parámetro se solapa con uno o más
-		-- rectángulos en la estructura. El resultado de la función es 
-		-- la lista de rectángulos solapados.
+		-- ** Consulta la estructura para determinar si el rectángulo suministrado como parámetro se solapa con uno o más rectángulos en la estructura. El resultado de la función es la lista de rectángulos solapados.
 	search,
 		-- ** Construye un RTree a partir de una lista de rectángulos.
-	Point,
 	fromList,
+		-- ** Construye un RTree a partir de un conjunto de rectángulos.
 	fromList',
 		-- ** Construye un Rectangle a partir de una lista de 8 enteros.
 	makeRect4,
+		-- * Construye un Rectangle a partir de dos Point.
 	makeRect2
 ) 
 where
@@ -56,9 +54,10 @@ import Data.Either
 import Control.Monad.Error
 import Test.QuickCheck
 
--- Hilbert Value
+-- Hilbert Value.
 type HV = Int
 
+-- Punto en el espacio de coordenadas X y Y.
 type Point = (Int,Int)
 
 {-
@@ -77,22 +76,26 @@ type Point = (Int,Int)
   rectángulos arbitrarios para casos de prueba con QuickCheck.
  -}
 data Rectangle = R {
-	ul :: (Int, Int),	-- ^ Vertice superior izquierdo   (X0,Y0)
-	ll :: (Int, Int),	-- ^ Vertice inferior izquierdo   (X0,Y1)
-	lr :: (Int, Int),	-- ^ Vertice inferior derecho     (X1,Y1)
-	ur :: (Int, Int)	-- ^ Vertice superior derecho     (X1,Y0)
-} deriving (Show, Eq)
+	ul :: Point,	-- ^ Vertice superior izquierdo   (X0,Y1)
+	ll :: Point,	-- ^ Vertice inferior izquierdo   (X0,Y0)
+	lr :: Point,	-- ^ Vertice inferior derecho     (X1,Y0)
+	ur :: Point		-- ^ Vertice superior derecho     (X1,Y1)
+} deriving (Show)
+
+instance Eq Rectangle where
+	a == b = (ul a == ul b) && (ll a == ll b) && (lr a == lr b) && (ur a == ur b)
 
 instance Ord Rectangle where
 	compare r1 r2 = orderHV r1 r2
 
-
+-- No se generan valores de todo el rango posible (0 a 65536) para aumentar
+-- la posibilidad de coincidencias entre rectángulos.
 instance Arbitrary Rectangle where
 	arbitrary = do
-		x0 <- choose (0,65535)
-		y0 <- choose (0,65535)
-		x1 <- choose (x0,65536)
-		y1 <- choose (y0,65536)
+		x0 <- choose (0,49)
+		y0 <- choose (0,49)
+		x1 <- choose (x0,50)
+		y1 <- choose (y0,50)
 		return $ R (x0,y1) (x0,y0) (x1,y0) (x1,y1)
 
 
@@ -119,14 +122,13 @@ data RTree =
 
 instance Ord RTree where
 	compare t1 t2 =  compare (hv t1) (hv t2)
-		
 
 instance Arbitrary RTree where
 	arbitrary = do
-		rs <- suchThat (listOf1 $ (arbitrary :: Gen Rectangle)) f
+		rs <- {-suchThat (-}listOf1 $ (arbitrary :: Gen Rectangle){-) f-}
 		return $ fromList rs
-		where
-		f xs = length xs >= 0
+		{-where
+		f xs = length xs >= 0 && length <= 1000-}
 
 
 {- Error 
@@ -200,17 +202,23 @@ orderHV r1 r2 = compare (hilbval r1) (hilbval r2)
 
 
 {-
-  @createRect@ permite construir un rectángulo a partir de una lista 
-  de 8 enteros
+  @makeRect4@ permite construir un rectángulo a partir de una lista 
+  de 8 enteros.
  -}
 makeRect4 :: [Int] -> Rectangle
 makeRect4 [xa,ya,xb,yb,xc,yc,xd,yd] = R (xa,ya) (xb,yb) (xc,yc) (xd,yd)
 
 
+{-
+  @makeRect2@ permite construir un rectángulo a partir de 2 puntos en
+  el espacio.
+ -}
 makeRect2 :: Point -> Point -> Rectangle
 makeRect2 l@(x0,y0) u@(x1,y1) 
 	| l<=u		 = R (x0,y1) (x0,y0) (x1,y0) (x1,y1)
 	| otherwise	 = R (x1,y0) (x1,y1) (x0,y1) (x0,y0)
+
+
 {-
   @boundingBox@ calcula el rectángulo que envuelve a una serie de 
   rectangulos.
@@ -252,9 +260,9 @@ raiseTree []  = Empty
 raiseTree [t] = t
 raiseTree ls = raiseTree $ roots ls where
 		roots = roots' []
-		roots' res bs = case null bs of
-			True	  -> reverse res
-			otherwise -> 
+		roots' res bs
+			| null bs = reverse res
+			| otherwise =
 				roots' ((makeBranch (DS.fromList(child))) : res) rest where
 				(child,rest) = splitAt nodeCapacity bs
 
@@ -267,7 +275,7 @@ fromList = raiseTree . leaves . DL.sortBy orderHV
 	where 
 		leaves  = leaves' [] 
 		leaves' res [] = reverse res
-		leaves' res s  = leaves' ((makeLeaf $ DS.fromList rec) : res ) rest where
+		leaves' res s  = leaves' ((makeLeaf (DS.fromList rec)) : res ) rest where
 			(rec,rest) = splitAt leafCapacity s
 
 fromList' ::  F.Foldable t => t Rectangle -> RTree
@@ -289,14 +297,12 @@ fromList' = F.foldl' (f) Empty where
 overflow :: RTree -> DS.Set RTree -> RTree
 overflow (Leaf _hv _rec rs) leafs
 	| exceso leafs = case (DS.findMin (childs rearmar)) of
-		l@(Leaf _ _ _) -> rearmar
+		(Leaf _ _ _) -> rearmar
 		otherwise -> rearmar{hv=0}	-- Permite reconocer que ocurrió un split
 	| otherwise = makeBranch leafs
 	where
 		rearmar :: RTree
-		rearmar = fromList $ DS.toList $ DS.fold romper DS.empty leafs
-		romper :: RTree -> DS.Set Rectangle -> DS.Set Rectangle
-		romper hoja recs = DS.union (rects hoja) recs
+		rearmar = fromList $ DS.toList $ treeToSet $ makeBranch leafs
 		exceso :: DS.Set RTree -> Bool
 		exceso ls = DS.member True (DS.map f ls)
 		f :: RTree -> Bool
@@ -342,12 +348,12 @@ overflowHandling (Branch _hv _rec ts) = overflow (DS.findMin ts) ts
   Si no, se devulve el nuevo árbol.
  -}
 insert :: RTree -> Rectangle -> Either String RTree
-insert Empty r = Right $ makeLeaf $ DS.singleton r
+insert Empty r = return $ makeLeaf $ DS.singleton r
 insert (Leaf _hv _rec rs) r 
 	| DS.size (DS.insert r rs) == DS.size rs = throwError "DuplicateRectangle"
-	| otherwise = Right $ makeLeaf $ DS.insert r rs
+	| otherwise = return $ makeLeaf $ DS.insert r rs
 insert (Branch _hv _rec trees) r = case (elegirTree trees) of
-	Right tree -> Right $ overflowHandling $ makeBranch $ reinsert tree
+	Right tree -> return $ overflowHandling $ makeBranch $ reinsert tree
 	otherwise -> throwError "DuplicateRectangle"
 	where
 		reinsert :: RTree -> DS.Set RTree
@@ -356,8 +362,8 @@ insert (Branch _hv _rec trees) r = case (elegirTree trees) of
 		elegirTree seqt = insert (arbol seqt) r
 		arbol :: DS.Set RTree -> RTree
 		arbol cjto
-			| DS.null (snd (DS.partition f cjto)) = DS.findMax cjto
-			| otherwise = DS.findMin (snd (DS.partition f cjto))
+			| DS.null (fst (DS.partition f cjto)) = DS.findMin cjto
+			| otherwise = DS.findMax (fst (DS.partition f cjto))
 		f :: RTree -> Bool
 		f tree = hv tree < hilbval r
 
@@ -374,15 +380,15 @@ delete :: RTree -> Rectangle -> Either String RTree
 delete Empty r = throwError "RectangleNotFound"
 delete (Leaf _hv _rec rs) r 
 	| (DS.size eliminado) == (DS.size rs) = throwError "RectangleNotFound"
-	| DS.null eliminado = Right Empty
-	| otherwise = Right (makeLeaf eliminado)
+	| DS.null eliminado = return Empty
+	| otherwise = return $ makeLeaf eliminado
 	where
 		eliminado :: DS.Set Rectangle
 		eliminado = DS.delete r rs
 
 delete (Branch _hv _rec trees) r = case g of
 	(null, Nothing) -> throwError "RectangleNotFound"
-	([newTree], Just oldTree) -> Right $ noBranch $ rearmar newTree oldTree
+	([newTree], Just oldTree) -> return $ noBranch $ rearmar newTree oldTree
 	where
 		noBranch :: DS.Set RTree -> RTree
 		noBranch seqt 
@@ -395,7 +401,7 @@ delete (Branch _hv _rec trees) r = case g of
 		g = (rights (DS.toList (DS.map f trees)), elimViejo trees (DS.toList (DS.map f trees)))
 		elimViejo :: DS.Set RTree -> [Either String RTree] -> Maybe RTree
 		elimViejo _ [] = Nothing
-		elimViejo ts ((Right _):xs) = Just (DS.findMin ts)
+		elimViejo ts ((Right _):xs) = return $ DS.findMin ts
 		elimViejo ts ((Left _):xs) = elimViejo (DS.deleteMin ts) xs
 		f :: RTree -> Either String RTree
 		f tree = delete tree r
@@ -411,7 +417,6 @@ delete (Branch _hv _rec trees) r = case g of
   
   Si existen se devuelve una lista de todos los rectángulos solapados. 
 -}
-
 search ::  RTree -> Rectangle -> Maybe [Rectangle]
 search Empty _r = Nothing
 search (Leaf _hv _rec rs) r
@@ -420,18 +425,21 @@ search (Leaf _hv _rec rs) r
 		[] -> Nothing
 		l -> return l
 search (Branch _hv br rs) r
-	| intersects r br = case find of
-		[] -> Nothing
-		l -> return l
+	| intersects r br = F.foldMap (flip (search) r) rs
 	| otherwise = Nothing
-	where
-		find = concat $ DM.catMaybes $ DS.toList $ DS.map (flip (search) r) rs
 
 
+{-
+  @intersects@ determina si dos rectángulos se intersectan.
+ -}
 intersects ::  Rectangle -> Rectangle -> Bool
 intersects a b = 
-	((bx0 < ax1 && ax1 <= bx1) && ((by0 <= ay0 && ay0 < by1) || (by0 < ay1 && ay1 <= by1))) ||
-	((by0 < ay1 && ay1 <= by1) && ((bx0 <= ax0 && ax0 < bx1) || (bx0 < ax1 && ax1 <= bx1)))
+	((bx0 < ax1 && ax1 <= bx1) && 
+		((by0 <= ay0 && ay0 < by1) || 
+		(by0 < ay1 && ay1 <= by1))) ||
+	((by0 < ay1 && ay1 <= by1) && 
+		((bx0 <= ax0 && ax0 < bx1) || 
+		(bx0 < ax1 && ax1 <= bx1)))
 	where
 		ax0 = fst $ ll a
 		bx0 = fst $ ll b
@@ -441,36 +449,7 @@ intersects a b =
 		by0 = snd $ ll b
 		ay1 = snd $ ur a
 		by1 = snd $ ur b
-	
-	
-	{-(fst (ll r1) >= fst (ll r2) && snd (ll r1) >= snd (ll r2) && fst (ll r1) < fst (ur r2) && snd (ll r1) < snd (ur r2)) ||
-	(fst (lr r1) <= fst (ll r2) && snd (lr r1) >= snd (ll r2) && fst (lr r1) > fst (ul r2) && snd (lr r1) < snd (ul r2)) ||
-	(fst (ul r1) >= fst (ul r2) && snd (ul r1) <= snd (ul r2) && fst (ul r1) < fst (lr r2) && snd (ul r1) > snd (lr r2)) ||
-	(fst (ur r1) >= fst (ll r2) && snd (ur r1) >= snd (ll r2) && fst (ur r1) < fst (ul r2) && snd (ur r1) < snd (ul r2))-}
-	
-	{-(((fst (ul r2) < fst (ur r1)) && 
-						(fst (ur r1) <= fst (ur r2)) ||
-						(fst (ul r2) <= fst (ul r1)) && 
-						(fst (ul r1) < fst (ur r2))) &&
-						(((snd (ul r2) <= snd (ul r1)) && 
-							(snd (ul r1) < snd (ll r2))) || 
-							((snd (ul r2) < snd (ll r1)) && 
-							(snd (ll r1) <= snd (ll r2))))) ||
-						(((fst (ul r1) < fst (ur r2)) && 
-						(fst (ur r2) <= fst (ur r1)) ||
-						(fst (ul r1) <= fst (ul r2)) && 
-						(fst (ul r2) < fst (ur r1))) &&
-						(((snd (ul r1) <= snd (ul r2)) && 
-							(snd (ul r2) < snd (ll r1))) || 
-							((snd (ul r1) < snd (ll r2)) && 
-							(snd (ll r2) <= snd (ll r1)))))-}
-	
-	{-( ll r1 > ll r2 && ll r1 < ur r2) ||
-				( lr r1 > ll r2 && lr r1 < ur r2) ||
-				( ul r1 > ll r2 && ul r1 < ur r2) ||
-				( ur r1 > ll r2 && ur r1 < ur r2) -}
 
----------------------------------------------------------------------
 
 {-
   @tall@ calcula la altura de un árbol desde su raíz hasta las hojas.
@@ -561,6 +540,19 @@ prop_ord_insert t r = case (insert t r) of
 
 
 {-
+  @prop_empty_insert@ representa una propiedad que debe cumplirse al
+  insertar un rectángulo en un árbol vacío.
+  
+  Al insertar cualquier rectángulo en un árbol vacío no debe producirse
+  ningún error y el árbol resultante debe ser una hoja que contenga
+  únicamente al nuevo rectángulo.
+ -}
+prop_empty_insert :: Rectangle -> Bool
+prop_empty_insert r = case (insert Empty r) of
+	Right t -> makeLeaf (DS.singleton r) == t
+
+
+{-
   @prop_tall_delete@ representa una propiedad que debe cumplirse al eliminar
   un rectángulo de un árbol.
   
@@ -589,27 +581,55 @@ prop_member_delete t r = case (delete t r) of
 	Right tree -> not (DS.member r (treeToSet tree)) && 
 					(DS.member r (treeToSet t))
 	otherwise -> not $ DS.member r $ treeToSet t
-   -- q el eliminado ya no este
-	
+
+
+{-
+  @prop_empty_delete@ representa una propiedad que debe cumplirse al
+  eliminar un rectángulo en un árbol vacío.
+  
+  Siempre que se elimine un rectángulo en un árbol vacío se producirá
+  un error.
+ -}
+prop_empty_delete :: Rectangle -> Bool
+prop_empty_delete r = case (delete Empty r) of
+	Left e -> e == "RectangleNotFound"
+
+
 {-
   @prop_search@ representa a la propiedad que debe cumplirse al buscar
   solapamientos con un rectángulo en un árbol.
   
   Si al buscar un rectángulo se produce un Nothing quiere decir que el
-  rectángulo no se encontraba en el árbol.
+  rectángulo no se intersectaba con ningúno en el árbol.
   
   Si se produce una lista de solapamientos entonces dicha lista es un 
-  subconjunto del conjunto de rectángulos que conforman el árbol.
+  subconjunto del conjunto de rectángulos que conforman el árbol y cada
+  rectángulo en ella se intersecta con el rectángulo de búsqueda.
  -}
 prop_search :: RTree -> Rectangle -> Bool
 prop_search t r = case (search t r) of
-	Just rs -> (DS.fromList rs) ==  inside
+	Just rs -> (DS.isSubsetOf inside rectSet) && ((DS.fromList rs) ==  inside)
 	Nothing -> (DS.null inside) && (outside == rectSet)
 	where
 		(inside,outside) = DS.partition (intersects r) (rectSet)
 		rectSet = treeToSet t
 
 
+{-
+  @prop_empty_search@ representa a la propiedad que debe cumplirse al buscar
+  solapamientos con un rectángulo en un árbol vacío.
+  
+  Siempre que se busque algún solapamiento en un árbol vacío no se obtendrán
+  resultados.
+ -}
+prop_empty_search :: Rectangle -> Bool
+prop_empty_search r = (search Empty r) == Nothing
+
+
+{-
+  @test@ ejecuta todas las pruebas.
+ -}
+test :: IO()
 test = do
 	putStrLn "member_insert"
 	quickCheck prop_member_insert
@@ -617,13 +637,19 @@ test = do
 	quickCheck prop_ord_insert
 	putStrLn "tall insert"
 	quickCheck prop_tall_insert
+	putStrLn "empty insert"
+	quickCheck prop_empty_insert
 	putStrLn "search"
 	quickCheck prop_search
+	putStrLn "empty search"
+	quickCheck prop_empty_search
 	putStrLn "member delete"
 	quickCheck prop_member_delete
 	putStrLn "tall delete"
 	quickCheck prop_tall_delete
-	putStrLn "done"
+	putStrLn "empty delete"
+	quickCheck prop_empty_delete
+	putStrLn "DONE"
 
 
 --------------------------------------------------------------------------------
@@ -648,144 +674,79 @@ arbolp = makeBranch (DS.fromList [
 	makeBranch (DS.fromList [hoja1]),
 	makeBranch (DS.fromList [hoja2])])
 
--- PRUEBAS PARA EL INSERT
-e = R {ul=(21,16), ll=(21,26), lr=(31,26), ur=(31,16)}
-f = R {ul=(22,17), ll=(22,27), lr=(32,27), ur=(32,17)}
-g = R {ul=(23,18), ll=(23,28), lr=(33,28), ur=(33,18)}
-h = R {ul=(24,19), ll=(24,29), lr=(34,29), ur=(34,19)}
-i = R {ul=(25,20), ll=(25,30), lr=(35,30), ur=(35,20)}
-j = R {ul=(26,21), ll=(26,31), lr=(36,31), ur=(36,21)}
-k = R {ul=(27,22), ll=(27,32), lr=(37,32), ur=(37,22)}
-l = R {ul=(28,23), ll=(28,33), lr=(38,33), ur=(38,23)}
-m = R {ul=(29,24), ll=(29,34), lr=(39,34), ur=(39,24)}
-n = R {ul=(30,25), ll=(30,35), lr=(40,35), ur=(40,25)}
-o = R {ul=(31,26), ll=(31,36), lr=(41,36), ur=(41,26)}
-p = R {ul=(32,27), ll=(32,37), lr=(42,37), ur=(42,27)}
-q = R {ul=(33,28), ll=(33,38), lr=(43,38), ur=(43,28)}
-r = R {ul=(34,29), ll=(34,39), lr=(44,39), ur=(44,29)}
-s = R {ul=(35,30), ll=(35,40), lr=(45,40), ur=(45,30)}
-t = R {ul=(36,31), ll=(36,41), lr=(46,41), ur=(46,31)}
-h1 = makeLeaf $ DS.fromList [j,h,i,g]
-h2 = makeLeaf $ DS.fromList [f,b,e,d]
-h3 = makeLeaf $ DS.fromList [k,o,n,m]
-h4 = makeLeaf $ DS.fromList [l,p,t,q]
-h5 = makeLeaf $ DS.fromList [r,s,x,y]
-overleaf = makeBranch $ DS.fromList [h1,h2,h3,h4,h5]
+
+
+-- problemas con el fromList: me elimina una hoja de la nada :S
+ainsert = Branch {hv = 653, mbr = R {ul = (2,50), ll = (2,2), lr = (49,2), ur = (49,50)}, childs = DS.fromList [
+Leaf {hv = 564, mbr = R {ul = (2,41), ll = (2,2), lr = (37,2), ur = (37,41)}, rects = DS.fromList [R {ul = (5,30), ll = (5,15), lr = (37,15), ur = (37,30)},R {ul = (2,41), ll = (2,2), lr = (33,2), ur = (33,41)},R {ul = (8,29), ll = (8,23), lr = (32,23), ur = (32,29)}]},
+Leaf {hv = 2105, mbr = R {ul = (17,50), ll = (17,23), lr = (49,23), ur = (49,50)}, rects = DS.fromList [R {ul = (44,36), ll = (44,23), lr = (46,23), ur = (46,36)},R {ul = (30,50), ll = (30,28), lr = (41,28), ur = (41,50)},R {ul = (17,50), ll = (17,36), lr = (49,36), ur = (49,50)}]},
+Leaf {hv = 3404, mbr = R {ul = (20,44), ll = (20,29), lr = (41,29), ur = (41,44)}, rects = DS.fromList [R {ul = (39,43), ll = (39,42), lr = (41,42), ur = (41,43)},R {ul = (20,44), ll = (20,29), lr = (35,29), ur = (35,44)}]}]}
+
+rinsert = R {ul = (34,37), ll = (34,30), lr = (47,30), ur = (47,37)}
+
+a2insert = Branch {hv = 653, mbr = R {ul = (2,50), ll = (2,2), lr = (49,2), ur = (49,50)}, childs = DS.fromList [
+Leaf {hv = 564, mbr = R {ul = (2,41), ll = (2,2), lr = (37,2), ur = (37,41)}, rects = DS.fromList [R {ul = (5,30), ll = (5,15), lr = (37,15), ur = (37,30)},R {ul = (2,41), ll = (2,2), lr = (33,2), ur = (33,41)},R {ul = (8,29), ll = (8,23), lr = (32,23), ur = (32,29)}]},
+Leaf {hv = 2105, mbr = R {ul = (17,50), ll = (17,23), lr = (49,23), ur = (49,50)}, rects = DS.fromList [R {ul = (44,36), ll = (44,23), lr = (46,23), ur = (46,36)},R {ul = (30,50), ll = (30,28), lr = (41,28), ur = (41,50)},R {ul = (17,50), ll = (17,36), lr = (49,36), ur = (49,50)},R {ul = (34,37), ll = (34,30), lr = (47,30), ur = (47,37)}]},
+Leaf {hv = 3404, mbr = R {ul = (20,44), ll = (20,29), lr = (41,29), ur = (41,44)}, rects = DS.fromList [R {ul = (39,43), ll = (39,42), lr = (41,42), ur = (41,43)},R {ul = (20,44), ll = (20,29), lr = (35,29), ur = (35,44)}]}]}
+
+maphilbval = DS.map hilbval (treeToSet ainsert)
+unir2 (a,b) = DS.union a b
+
+
+-- problemas al intentar eliminar un rect q no existe pero tiene el mismo HV q uno q si existe
+adelete = Branch {hv = 652, mbr = R {ul = (0,50), ll = (0,4), lr = (50,4), ur = (50,50)}, childs = DS.fromList [Branch {hv = 651, mbr = R {ul = (2,50), ll = (2,4), lr = (50,4), ur = (50,50)}, childs = DS.fromList [Branch {hv = 651, mbr = R {ul = (6,50), ll = (6,5), lr = (47,5), ur = (47,50)}, childs = DS.fromList [Leaf {hv = 610, mbr = R {ul = (6,44), ll = (6,15), lr = (37,15), ur = (37,44)}, rects = DS.fromList [R {ul = (6,44), ll = (6,16), lr = (32,16), ur = (32,44)},R {ul = (18,44), ll = (18,15), lr = (19,15), ur = (19,44)},R {ul = (8,37), ll = (8,26), lr = (37,26), ur = (37,37)}]},Leaf {hv = 629, mbr = R {ul = (6,50), ll = (6,5), lr = (35,5), ur = (35,50)}, rects = DS.fromList [R {ul = (6,9), ll = (6,7), lr = (19,7), ur = (19,9)},R {ul = (8,50), ll = (8,5), lr = (23,5), ur = (23,50)},R {ul = (7,39), ll = (7,6), lr = (35,6), ur = (35,39)}]},Leaf {hv = 691, mbr = R {ul = (14,44), ll = (14,11), lr = (47,11), ur = (47,44)}, rects = DS.fromList [R {ul = (22,42), ll = (22,11), lr = (22,11), ur = (22,42)},R {ul = (16,44), ll = (16,15), lr = (47,15), ur = (47,44)},R {ul = (14,31), ll = (14,13), lr = (41,13), ur = (41,31)}]}]},Branch {hv = 723, mbr = R {ul = (2,43), ll = (2,4), lr = (50,4), ur = (50,43)}, childs = DS.fromList [Leaf {hv = 727, mbr = R {ul = (2,40), ll = (2,4), lr = (49,4), ur = (49,40)}, rects = DS.fromList [R {ul = (12,14), ll = (12,8), lr = (44,8), ur = (44,14)},R {ul = (2,16), ll = (2,14), lr = (37,14), ur = (37,16)},R {ul = (49,40), ll = (49,4), lr = (49,4), ur = (49,40)}]},Leaf {hv = 1845, mbr = R {ul = (38,43), ll = (38,12), lr = (50,12), ur = (50,43)}, rects = DS.fromList [R {ul = (38,43), ll = (38,17), lr = (46,17), ur = (46,43)},R {ul = (47,35), ll = (47,12), lr = (47,12), ur = (47,35)},R {ul = (44,30), ll = (44,15), lr = (50,15), ur = (50,30)}]},Leaf {hv = 1929, mbr = R {ul = (30,37), ll = (30,5), lr = (42,5), ur = (42,37)}, rects = DS.fromList [R {ul = (38,37), ll = (38,7), lr = (42,7), ur = (42,37)},R {ul = (37,36), ll = (37,5), lr = (39,5), ur = (39,36)},R {ul = (30,23), ll = (30,10), lr = (35,10), ur = (35,23)}]}]},Branch {hv = 2028, mbr = R {ul = (24,47), ll = (24,16), lr = (50,16), ur = (50,47)}, childs = DS.fromList [Leaf {hv = 2013, mbr = R {ul = (24,34), ll = (24,18), lr = (50,18), ur = (50,34)}, rects = DS.fromList [R {ul = (25,27), ll = (25,18), lr = (43,18), ur = (43,27)},R {ul = (24,28), ll = (24,19), lr = (42,19), ur = (42,28)},R {ul = (27,34), ll = (27,22), lr = (50,22), ur = (50,34)}]},Leaf {hv = 2020, mbr = R {ul = (33,41), ll = (33,16), lr = (43,16), ur = (43,41)}, rects = DS.fromList [R {ul = (36,41), ll = (36,16), lr = (43,16), ur = (43,41)},R {ul = (33,32), ll = (33,29), lr = (39,29), ur = (39,32)},R {ul = (36,38), ll = (36,28), lr = (37,28), ur = (37,38)}]},Leaf {hv = 2117, mbr = R {ul = (31,47), ll = (31,33), lr = (39,33), ur = (39,47)}, rects = DS.fromList [R {ul = (32,41), ll = (32,33), lr = (38,33), ur = (38,41)},R {ul = (31,46), ll = (31,39), lr = (39,39), ur = (39,46)},R {ul = (37,47), ll = (37,47), lr = (38,47), ur = (38,47)}]}]}]},Branch {hv = 3437, mbr = R {ul = (0,50), ll = (0,19), lr = (50,19), ur = (50,50)}, childs = DS.fromList [Branch {hv = 3383, mbr = R {ul = (9,50), ll = (9,34), lr = (50,34), ur = (50,50)}, childs = DS.fromList [Leaf {hv = 2190, mbr = R {ul = (30,48), ll = (30,36), lr = (50,36), ur = (50,48)}, rects = DS.fromList [R {ul = (30,45), ll = (30,36), lr = (45,36), ur = (45,45)},R {ul = (32,48), ll = (32,36), lr = (50,36), ur = (50,48)},R {ul = (40,46), ll = (40,45), lr = (46,45), ur = (46,46)}]},Leaf {hv = 2539, mbr = R {ul = (46,49), ll = (46,34), lr = (50,34), ur = (50,49)}, rects = DS.fromList [R {ul = (46,34), ll = (46,34), lr = (46,34), ur = (46,34)},R {ul = (47,45), ll = (47,45), lr = (50,45), ur = (50,45)},R {ul = (48,49), ll = (48,46), lr = (48,46), ur = (48,49)}]},Leaf {hv = 3382, mbr = R {ul = (9,50), ll = (9,37), lr = (49,37), ur = (49,50)}, rects = DS.fromList [R {ul = (46,50), ll = (46,46), lr = (47,46), ur = (47,50)},R {ul = (39,50), ll = (39,49), lr = (40,49), ur = (40,50)},R {ul = (9,50), ll = (9,37), lr = (49,37), ur = (49,50)}]}]},Branch {hv = 3436, mbr = R {ul = (0,49), ll = (0,19), lr = (49,19), ur = (49,49)}, childs = DS.fromList [Leaf {hv = 3395, mbr = R {ul = (11,43), ll = (11,35), lr = (49,35), ur = (49,43)}, rects = DS.fromList [R {ul = (13,43), ll = (13,41), lr = (46,41), ur = (46,43)},R {ul = (24,42), ll = (24,35), lr = (36,35), ur = (36,42)},R {ul = (11,43), ll = (11,36), lr = (49,36), ur = (49,43)}]},Leaf {hv = 3404, mbr = R {ul = (15,49), ll = (15,23), lr = (46,23), ur = (46,49)}, rects = DS.fromList [R {ul = (24,49), ll = (24,23), lr = (33,23), ur = (33,49)},R {ul = (15,40), ll = (15,33), lr = (46,33), ur = (46,40)},R {ul = (28,43), ll = (28,25), lr = (30,25), ur = (30,43)}]},Leaf {hv = 3684, mbr = R {ul = (0,47), ll = (0,19), lr = (22,19), ur = (22,47)}, rects = DS.fromList [R {ul = (18,45), ll = (18,19), lr = (20,19), ur = (20,45)},R {ul = (0,42), ll = (0,22), lr = (22,22), ur = (22,42)},R {ul = (9,47), ll = (9,25), lr = (9,25), ur = (9,47)}]}]}]}]}
+rdelete = R {ul = (31,50), ll = (31,48), lr = (48,48), ur = (48,50)}
+
+a2delete = Branch {hv = 642, mbr = R {ul = (0,50), ll = (0,0), lr = (50,0), ur = (50,50)}, childs = DS.fromList [Branch {hv = 642, mbr = R {ul = (0,50), ll = (0,0), lr = (50,0), ur = (50,50)}, childs = DS.fromList [Branch {hv = 626, mbr = R {ul = (0,50), ll = (0,2), lr = (44,2), ur = (44,50)}, childs = DS.fromList [Leaf {hv = 579, mbr = R {ul = (3,45), ll = (3,3), lr = (32,3), ur = (32,45)}, rects = DS.fromList [R {ul = (3,45), ll = (3,4), lr = (20,4), ur = (20,45)},R {ul = (8,31), ll = (8,3), lr = (18,3), ur = (18,31)},R {ul = (15,26), ll = (15,15), lr = (32,15), ur = (32,26)}]},Leaf {hv = 611, mbr = R {ul = (0,50), ll = (0,9), lr = (40,9), ur = (40,50)}, rects = DS.fromList [R {ul = (11,32), ll = (11,11), lr = (33,11), ur = (33,32)},R {ul = (4,28), ll = (4,16), lr = (40,16), ur = (40,28)},R {ul = (0,50), ll = (0,9), lr = (37,9), ur = (37,50)}]},Leaf {hv = 695, mbr = R {ul = (15,50), ll = (15,2), lr = (44,2), ur = (44,50)}, rects = DS.fromList [R {ul = (15,47), ll = (15,2), lr = (28,2), ur = (28,47)},R {ul = (22,50), ll = (22,12), lr = (29,12), ur = (29,50)},R {ul = (17,32), ll = (17,30), lr = (44,30), ur = (44,32)}]}]},Branch {hv = 756, mbr = R {ul = (8,37), ll = (8,0), lr = (48,0), ur = (48,37)}, childs = DS.fromList [Leaf {hv = 717, mbr = R {ul = (22,37), ll = (22,7), lr = (37,7), ur = (37,37)}, rects = DS.fromList [R {ul = (22,37), ll = (22,16), lr = (37,16), ur = (37,37)},R {ul = (27,36), ll = (27,14), lr = (33,14), ur = (33,36)},R {ul = (22,31), ll = (22,7), lr = (33,7), ur = (33,31)}]},Leaf {hv = 772, mbr = R {ul = (11,31), ll = (11,0), lr = (48,0), ur = (48,31)}, rects = DS.fromList [R {ul = (11,27), ll = (11,5), lr = (44,5), ur = (44,27)},R {ul = (16,29), ll = (16,8), lr = (47,8), ur = (47,29)},R {ul = (13,31), ll = (13,0), lr = (48,0), ur = (48,31)}]},Leaf {hv = 830, mbr = R {ul = (8,27), ll = (8,1), lr = (40,1), ur = (40,27)}, rects = DS.fromList [R {ul = (12,13), ll = (12,5), lr = (40,5), ur = (40,13)},R {ul = (10,22), ll = (10,4), lr = (35,4), ur = (35,22)},R {ul = (8,27), ll = (8,1), lr = (33,1), ur = (33,27)}]}]},Branch {hv = 761, mbr = R {ul = (10,39), ll = (10,0), lr = (50,0), ur = (50,39)}, childs = DS.fromList [Leaf {hv = 897, mbr = R {ul = (10,15), ll = (10,0), lr = (35,0), ur = (35,15)}, rects = DS.fromList [R {ul = (10,15), ll = (10,4), lr = (35,4), ur = (35,15)},R {ul = (11,9), ll = (11,6), lr = (29,6), ur = (29,9)},R {ul = (28,15), ll = (28,0), lr = (35,0), ur = (35,15)}]},Leaf {hv = 1182, mbr = R {ul = (35,24), ll = (35,1), lr = (50,1), ur = (50,24)}, rects = DS.fromList [R {ul = (38,20), ll = (38,11), lr = (45,11), ur = (45,20)},R {ul = (35,24), ll = (35,3), lr = (50,3), ur = (50,24)},R {ul = (45,24), ll = (45,1), lr = (48,1), ur = (48,24)}]},Leaf {hv = 1819, mbr = R {ul = (34,39), ll = (34,17), lr = (49,17), ur = (49,39)}, rects = DS.fromList [R {ul = (47,37), ll = (47,21), lr = (49,21), ur = (49,37)},R {ul = (49,39), ll = (49,20), lr = (49,20), ur = (49,39)},R {ul = (34,35), ll = (34,17), lr = (47,17), ur = (47,35)}]}]}]},Branch {hv = 651, mbr = R {ul = (2,50), ll = (2,5), lr = (50,5), ur = (50,50)}, childs = DS.fromList [Branch {hv = 2008, mbr = R {ul = (28,48), ll = (28,5), lr = (49,5), ur = (49,48)}, childs = DS.fromList [Leaf {hv = 1853, mbr = R {ul = (43,46), ll = (43,5), lr = (49,5), ur = (49,46)}, rects = DS.fromList [R {ul = (43,46), ll = (43,5), lr = (46,5), ur = (46,46)},R {ul = (44,33), ll = (44,22), lr = (44,22), ur = (44,33)},R {ul = (44,39), ll = (44,16), lr = (49,16), ur = (49,39)}]},Leaf {hv = 2019, mbr = R {ul = (28,40), ll = (28,16), lr = (47,16), ur = (47,40)}, rects = DS.fromList [R {ul = (28,35), ll = (28,16), lr = (41,16), ur = (41,35)},R {ul = (37,40), ll = (37,20), lr = (39,20), ur = (39,40)},R {ul = (31,39), ll = (31,26), lr = (47,26), ur = (47,39)}]},Leaf {hv = 2173, mbr = R {ul = (36,48), ll = (36,34), lr = (40,34), ur = (40,48)}, rects = DS.fromList [R {ul = (36,37), ll = (36,34), lr = (36,34), ur = (36,37)},R {ul = (37,48), ll = (37,41), lr = (40,41), ur = (40,48)},R {ul = (37,42), ll = (37,42), lr = (38,42), ur = (38,42)}]}]},Branch {hv = 2267, mbr = R {ul = (32,50), ll = (32,22), lr = (50,22), ur = (50,50)}, childs = DS.fromList [Leaf {hv = 2175, mbr = R {ul = (32,50), ll = (32,30), lr = (47,30), ur = (47,50)}, rects = DS.fromList [R {ul = (32,50), ll = (32,30), lr = (43,30), ur = (43,50)},R {ul = (40,47), ll = (40,46), lr = (47,46), ur = (47,47)},R {ul = (43,47), ll = (43,47), lr = (45,47), ur = (45,47)}]},Leaf {hv = 2226, mbr = R {ul = (42,50), ll = (42,34), lr = (50,34), ur = (50,50)}, rects = DS.fromList [R {ul = (45,50), ll = (45,45), lr = (50,45), ur = (50,50)},R {ul = (42,48), ll = (42,39), lr = (46,39), ur = (46,48)},R {ul = (45,40), ll = (45,34), lr = (45,34), ur = (45,40)}]},Leaf {hv = 2275, mbr = R {ul = (35,48), ll = (35,22), lr = (49,22), ur = (49,48)}, rects = DS.fromList [R {ul = (35,48), ll = (35,22), lr = (49,22), ur = (49,48)},R {ul = (36,48), ll = (36,23), lr = (44,23), ur = (44,48)},R {ul = (41,35), ll = (41,31), lr = (45,31), ur = (45,35)}]}]},Branch {hv = 3431, mbr = R {ul = (2,50), ll = (2,16), lr = (50,16), ur = (50,50)}, childs = DS.fromList [Leaf {hv = 2240, mbr = R {ul = (45,49), ll = (45,30), lr = (50,30), ur = (50,49)}, rects = DS.fromList [R {ul = (48,41), ll = (48,30), lr = (50,30), ur = (50,41)},R {ul = (48,37), ll = (48,33), lr = (49,33), ur = (49,37)},R {ul = (45,49), ll = (45,47), lr = (48,47), ur = (48,49)}]},Leaf {hv = 2289, mbr = R {ul = (42,48), ll = (42,16), lr = (49,16), ur = (49,48)}, rects = DS.fromList [R {ul = (42,35), ll = (42,34), lr = (49,34), ur = (49,35)},R {ul = (44,38), ll = (44,29), lr = (49,29), ur = (49,38)},R {ul = (49,48), ll = (49,16), lr = (49,16), ur = (49,48)}]},Leaf {hv = 3268, mbr = R {ul = (2,50), ll = (2,47), lr = (50,47), ur = (50,50)}, rects = DS.fromList [R {ul = (40,49), ll = (40,48), lr = (43,48), ur = (43,49)},R {ul = (2,50), ll = (2,49), lr = (50,49), ur = (50,50)},R {ul = (21,50), ll = (21,47), lr = (37,47), ur = (37,50)}]}]}]},Branch {hv = 3437, mbr = R {ul = (3,49), ll = (3,19), lr = (47,19), ur = (47,49)}, childs = DS.fromList [Branch {hv = 3437, mbr = R {ul = (4,49), ll = (4,19), lr = (47,19), ur = (47,49)}, childs = DS.fromList [Leaf {hv = 3351, mbr = R {ul = (10,49), ll = (10,43), lr = (40,43), ur = (40,49)}, rects = DS.fromList [R {ul = (28,45), ll = (28,43), lr = (35,43), ur = (35,45)},R {ul = (10,49), ll = (10,45), lr = (40,45), ur = (40,49)},R {ul = (22,47), ll = (22,43), lr = (32,43), ur = (32,47)}]},Leaf {hv = 3437, mbr = R {ul = (18,49), ll = (18,19), lr = (33,19), ur = (33,49)}, rects = DS.fromList [R {ul = (20,38), ll = (20,31), lr = (33,31), ur = (33,38)},R {ul = (26,49), ll = (26,19), lr = (28,19), ur = (28,49)},R {ul = (18,45), ll = (18,19), lr = (25,19), ur = (25,45)}]},Leaf {hv = 3442, mbr = R {ul = (4,49), ll = (4,25), lr = (47,25), ur = (47,49)}, rects = DS.fromList [R {ul = (4,49), ll = (4,38), lr = (47,38), ur = (47,49)},R {ul = (27,36), ll = (27,28), lr = (34,28), ur = (34,36)},R {ul = (14,46), ll = (14,25), lr = (40,25), ur = (40,46)}]}]},Branch {hv = 3655, mbr = R {ul = (3,49), ll = (3,27), lr = (24,27), ur = (24,49)}, childs = DS.fromList [Leaf {hv = 3650, mbr = R {ul = (4,49), ll = (4,27), lr = (24,27), ur = (24,49)}, rects = DS.fromList [R {ul = (7,42), ll = (7,40), lr = (18,40), ur = (18,42)},R {ul = (4,49), ll = (4,27), lr = (24,27), ur = (24,49)},R {ul = (12,39), ll = (12,38), lr = (15,38), ur = (15,39)}]},Leaf {hv = 3706, mbr = R {ul = (3,47), ll = (3,31), lr = (19,31), ur = (19,47)}, rects = DS.fromList [R {ul = (3,47), ll = (3,31), lr = (19,31), ur = (19,47)}]}]}]}]}
+r2delete = R {ul = (31,39), ll = (31,13), lr = (50,13), ur = (50,39)}
 
 
 
 
 
-
--- ERROR QUICKCHECK
-
-arbolquick = (Branch {hv = 2270853427, 
-						mbr = R {ul = (8570,24581), ll = (8570,63848), lr = (65356,63848), ur = (65356,24581)}, 
-						childs = DS.fromList [
-							Leaf {hv = 2373404487, 
-									mbr = R {ul = (19335,24581), ll = (19335,54687), lr = (65356,54687), ur = (65356,24581)}, 
-									rects = DS.fromList [R {ul = (27160,29187), ll = (27160,34173), lr = (27783,34173), ur = (27783,29187)},R {ul = (28549,24581), ll = (28549,52342), lr = (49843,52342), ur = (49843,24581)},R {ul = (19335,37180), ll = (19335,45843), lr = (65356,45843), ur = (65356,37180)},R {ul = (56762,51914), ll = (56762,54687), lr = (58172,54687), ur = (58172,51914)}]},
-							Leaf {hv = 3124535267, 
-									mbr = R {ul = (8570,39185), ll = (8570,63848), lr = (64784,63848), ur = (64784,39185)}, 
-									rects = DS.fromList [R {ul = (63185,56100), ll = (63185,63848), lr = (64784,63848), ur = (64784,56100)},R {ul = (8570,39185), ll = (8570,46901), lr = (24846,46901), ur = (24846,39185)}]}]})
-
-
-recquick = (R {ul = (22475,42128), ll = (22475,59797), lr = (30568,59797), ur = (30568,42128)})
-
-   
-arbdelete = (Leaf {hv = 1724648175, 
-					mbr = R {ul = (62824,9643), ll = (62824,37579), lr = (63224,37579), ur = (63224,9643)}, 
-					rects = DS.fromList [R {ul = (62824,9643), ll = (62824,37579), lr = (63224,37579), ur = (63224,9643)}]})
-recdelete = (R {ul = (34083,4600), ll = (34083,42536), lr = (52021,42536), ur = (52021,4600)})
-   
-   
-badsearch = Branch {hv = 2163890544, mbr = R {ul = (8538,2200), ll = (8538,65375), lr = (64756,65375), ur = (64756,2200)}, childs = DS.fromList [Branch {hv = 2164961162, mbr = R {ul = (10914,2200), ll = (10914,65375), lr = (64756,65375), ur = (64756,2200)}, childs = DS.fromList [Leaf {hv = 736612351, mbr = R {ul = (10914,2200), ll = (10914,50150), lr = (53343,50150), ur = (53343,2200)}, rects = DS.fromList [R {ul = (30972,2200), ll = (30972,50150), lr = (31700,50150), ur = (31700,2200)},R {ul = (10914,5297), ll = (10914,22188), lr = (44197,22188), ur = (44197,5297)},R {ul = (50657,7800), ll = (50657,19640), lr = (53343,19640), ur = (53343,7800)}]},Leaf {hv = 2114213099, mbr = R {ul = (16751,5990), ll = (16751,51820), lr = (58002,51820), ur = (58002,5990)}, rects = DS.fromList [R {ul = (29346,5990), ll = (29346,42695), lr = (50997,42695), ur = (50997,5990)},R {ul = (16751,40167), ll = (16751,48836), lr = (58002,48836), ur = (58002,40167)},R {ul = (38713,25855), ll = (38713,51820), lr = (53050,51820), ur = (
-53050,25855)}]},Leaf {hv = 2311542698, mbr = R {ul = (24781,27330), ll = (24781,65375), lr = (64756,65375), ur = (64756,27330)}, rects = DS.fromList [R {ul = (61073,27330), ll = (61073,44750), lr = (64756,44750), ur = (64756,27330)},R {ul = (44553,59009), ll = (44553,65375), lr = (52132,65375), ur = (52132,59009)},R {ul = (24781,45470), ll = (24781,59164), lr = (40852,59164), ur = (40852,45470)}]}]},Branch {hv = 3758273672, mbr = R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}, childs = DS.fromList [Leaf {hv = 3758273672, mbr = R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}, rects = DS.fromList [R {ul = (16806,39699), ll = (16806,55246), lr = (21230,55246), ur = (21230,39699)},R {ul = (8538,37625), ll = (8538,59739), lr = (23354,59739), ur = (23354,37625)}]}]}]}
-
-
-
-asearch = Branch {hv = 2152621967, 
-	mbr = R {ul = (703,65425), ll = (703,5279), lr = (65176,5279), ur = (65176,65425)}, 
-	childs = DS.fromList [
-	Branch {hv = 2152621967,
-		mbr = R {ul = (703,65425), ll = (703,5279), lr = (65176,5279), ur = (65176,65425)}, 
-		childs = DS.fromList [
-		Branch {hv = 2082262462, 
-			mbr = R {ul = (3208,45486), ll = (3208,5279), lr = (65176,5279), ur = (65176,45486)}, 
-			childs = DS.fromList [
-			Leaf {hv = 801148457, 
-				mbr = R {ul = (3208,31245), ll = (3208,5279), lr = (62055,5279), ur = (62055,31245)}, 
-				rects = DS.fromList [
-				R {ul = (16627,31036), ll = (16627,5279), lr = (29241,5279), ur = (29241,31036)},
-				R {ul = (3208,31245), ll = (3208,11196), lr = (62055,11196), ur = (62055,31245)},
-				R {ul = (10585,14018), ll = (10585,8613), lr = (42429,8613), ur = (42429,14018)}]},
-			Leaf {hv = 1245691272, 
-				mbr = R {ul = (25926,22399), ll = (25926,5963), lr = (64228,5963), ur = (64228,22399)}, 
-				rects = DS.fromList [
-				R {ul = (25926,8027), ll = (25926,5963), lr = (43606,5963), ur = (43606,8027)},
-				R {ul = (32012,13673), ll = (32012,8286), lr = (63635,8286), ur = (63635,13673)},
-				R {ul = (64126,22399), ll = (64126,9964), lr = (64228,9964), ur = (64228,22399)}]},
-			Leaf {hv = 1807656142, 
-				mbr = R {ul = (49625,45486), ll = (49625,14966), lr = (65176,14966), ur = (65176,45486)}, 
-				rects = DS.fromList [
-				R {ul = (52487,22323), ll = (52487,17093), lr = (58775,17093), ur = (58775,22323)},
-				R {ul = (64156,45486), ll = (64156,14966), lr = (65176,14966), ur = (65176,45486)},
-				R {ul = (49625,37315), ll = (49625,25670), lr = (51163,25670), ur = (51163,37315)}]}]},
-		Branch {hv = 2288552396, 
-			mbr = R {ul = (24482,65172), ll = (24482,20164), lr = (64970,20164), ur = (64970,65172)}, 
-			childs = DS.fromList [
-			Leaf {hv = 2363047375, 
-				mbr = R {ul = (36251,54086), ll = (36251,24808), lr = (57661,24808), ur = (57661,54086)}, 
-				rects = DS.fromList [
-				R {ul = (36251,35120), ll = (36251,31424), lr = (54985,31424), ur = (54985,35120)},
-				R {ul = (49371,54086), ll = (49371,24808), lr = (56608,24808), ur = (56608,54086)},
-				R {ul = (54451,48255), ll = (54451,35201), lr = (57661,35201), ur = (57661,48255)}]},
-			Leaf {hv = 2380811142, 
-				mbr = R {ul = (24482,56709), ll = (24482,20164), lr = (64970,20164), ur = (64970,56709)}, 
-				rects = DS.fromList [
-				R {ul = (24482,38795), ll = (24482,20164), lr = (64970,20164), ur = (64970,38795)},
-				R {ul = (26529,56088), ll = (26529,37516), lr = (39211,37516), ur = (39211,56088)},
-				R {ul = (35567,56709), ll = (35567,24992), lr = (47979,24992), ur = (47979,56709)}]},
-			Leaf {hv = 2909293577, 
-				mbr = R {ul = (46325,65172), ll = (46325,50482), lr = (64911,50482), ur = (64911,65172)}, 
-				rects = DS.fromList [
-				R {ul = (56673,63984), ll = (56673,50482), lr = (57931,50482), ur = (57931,63984)},
-				R {ul = (59116,63530), ll = (59116,56823), lr = (64911,56823), ur = (64911,63530)},
-				R {ul = (46325,65172), ll = (46325,64045), lr = (47353,64045), ur = (47353,65172)}]}]},
-		Branch {hv = 3491171403, 
-			mbr = R {ul = (703,65425), ll = (703,31895), lr = (61372,31895), ur = (61372,65425)}, 
-			childs = DS.fromList [
-			Leaf {hv = 3099279636, 
-				mbr = R {ul = (16162,56718), ll = (16162,51301), lr = (61372,51301), ur = (61372,56718)}, 
-				rects = DS.fromList [
-				R {ul = (39963,56061), ll = (39963,55248), lr = (51496,55248), ur = (51496,56061)},
-				R {ul = (31687,56718), ll = (31687,51301), lr = (53588,51301), ur = (53588,56718)},
-				R {ul = (16162,56355), ll = (16162,55886), lr = (61372,55886), ur = (61372,56355)}]},
-			Leaf {hv = 3175606876, 
-				mbr = R {ul = (19029,65138), ll = (19029,50824), lr = (59794,50824), ur = (59794,65138)}, 
-				rects = DS.fromList [
-				R {ul = (30262,52035), ll = (30262,50824), lr = (39189,50824), ur = (39189,52035)},	
-				R {ul = (19029,65138), ll = (19029,63654), lr = (59794,63654), ur = (59794,65138)},	
-				R {ul = (30477,64764), ll = (30477,64506), lr = (47170,64506), ur = (47170,64764)}]},
-			Leaf {hv = 3506542435, 
-				mbr = R {ul = (703,65425), ll = (703,31895), lr = (56348,31895), ur = (56348,65425)}, 
-				rects = DS.fromList [
-				R {ul = (18827,65425), ll = (18827,61928), lr = (41093,61928), ur = (41093,65425)},
-				R {ul = (3708,36288), ll = (3708,31895), lr = (56348,31895), ur = (56348,36288)},
-				R {ul = (703,64289), ll = (703,48412), lr = (4569,48412), ur = (4569,64289)}]}]}]},
-		Branch {hv = 4173837034, 
-			mbr = R {ul = (4532,63340), ll = (4532,54371), lr = (19370,54371), ur = (19370,63340)}, 
-			childs = DS.fromList [
-			Branch {hv = 4173837034, 
-				mbr = R {ul = (4532,63340), ll = (4532,54371), lr = (19370,54371), ur = (19370,63340)}, 
-				childs = DS.fromList [
-				Leaf {hv = 4173837034, 
-					mbr = R {ul = (4532,63340), ll = (4532,54371), lr = (19370,54371), ur = (19370,63340)}, 
-					rects = DS.fromList [
-					R {ul = (4532,63340), ll = (4532,54371), lr = (19370,54371), ur = (19370,63340)}]}]}]}]}
-rsearch = R {ul = (325,4812), ll = (325,1760), lr = (55846,1760), ur = (55846,4812)}
-
-
-
-
-   --------------------------------------------------------------
+-- problemas al buscar esto... el resultado de la busqueda a mano tiene un rectangulo mas q lo obtenido en el partition con intersects...
+asearch = Branch {hv = 642, mbr = R {ul = (1,50), ll = (1,0), lr = (50,0), ur = (50,50)}, childs = DS.fromList [
+	Branch {hv = 642, mbr = R {ul = (1,50), ll = (1,0), lr = (50,0), ur = (50,50)}, childs = DS.fromList [
+		Branch {hv = 585, mbr = R {ul = (1,50), ll = (1,2), lr = (38,2), ur = (38,50)}, childs = DS.fromList [
+			Leaf {hv = 459, mbr = R {ul = (1,40), ll = (1,3), lr = (23,3), ur = (23,40)}, 
+				rects = DS.fromList [R {ul = (1,4), ll = (1,3), lr = (23,3), ur = (23,4)},R {ul = (2,40), ll = (2,17), lr = (2,17), ur = (2,40)},R {ul = (1,35), ll = (1,23), lr = (22,23), ur = (22,35)}]},
+			Leaf {hv = 584, mbr = R {ul = (4,50), ll = (4,2), lr = (33,2), ur = (33,50)}, 
+				rects = DS.fromList [R {ul = (4,20), ll = (4,17), lr = (29,17), ur = (29,20)},R {ul = (17,50), ll = (17,4), lr = (30,4), ur = (30,50)},R {ul = (9,47), ll = (9,2), lr = (33,2), ur = (33,47)}]},
+			Leaf {hv = 654, mbr = R {ul = (10,48), ll = (10,4), lr = (38,4), ur = (38,48)}, 
+				rects = DS.fromList [R {ul = (18,39), ll = (18,15), lr = (34,15), ur = (34,39)},R {ul = (10,48), ll = (10,4), lr = (38,4), ur = (38,48)},R {ul = (25,29), ll = (25,29), lr = (31,29), ur = (31,29)}]}]},
+		Branch {hv = 650, mbr = R {ul = (4,50), ll = (4,4), lr = (50,4), ur = (50,50)}, childs = DS.fromList [
+			Leaf {hv = 686, mbr = R {ul = (10,50), ll = (10,6), lr = (50,6), ur = (50,50)}, 
+				rects = DS.fromList [R {ul = (10,37), ll = (10,25), lr = (50,25), ur = (50,37)},R {ul = (21,50), ll = (21,6), lr = (39,6), ur = (39,50)},R {ul = (14,25), ll = (14,20), lr = (47,20), ur = (47,25)}]},
+			Leaf {hv = 820, mbr = R {ul = (4,20), ll = (4,5), lr = (49,5), ur = (49,20)}, 
+				rects = DS.fromList [R {ul = (9,19), ll = (9,5), lr = (33,5), ur = (33,19)},R {ul = (4,20), ll = (4,10), lr = (33,10), ur = (33,20)},R {ul = (47,15), ll = (47,11), lr = (49,11), ur = (49,15)}]},
+			Leaf {hv = 1845, mbr = R {ul = (40,50), ll = (40,4), lr = (49,4), ur = (49,50)}, 
+				rects = DS.fromList [R {ul = (43,50), ll = (43,8), lr = (49,8), ur = (49,50)},R {ul = (40,50), ll = (40,4), lr = (47,4), ur = (47,50)}]}]},
+		Branch {hv = 2002, mbr = R {ul = (25,50), ll = (25,0), lr = (50,0), ur = (50,50)}, childs = DS.fromList [
+			Leaf {hv = 1843, mbr = R {ul = (39,50), ll = (39,0), lr = (50,0), ur = (50,50)}, 
+				rects = DS.fromList [R {ul = (41,50), ll = (41,0), lr = (44,0), ur = (44,50)},R {ul = (43,31), ll = (43,24), lr = (50,24), ur = (50,31)},R {ul = (39,23), ll = (39,17), lr = (44,17), ur = (44,23)}]},
+			Leaf {hv = 1970, mbr = R {ul = (25,35), ll = (25,8), lr = (41,8), ur = (41,35)}, 
+				rects = DS.fromList [R {ul = (25,24), ll = (25,8), lr = (39,8), ur = (39,24)},R {ul = (26,19), ll = (26,19), lr = (41,19), ur = (41,19)},R {ul = (29,35), ll = (29,17), lr = (35,17), ur = (35,35)}]},
+			Leaf {hv = 2028, mbr = R {ul = (29,46), ll = (29,16), lr = (45,16), ur = (45,46)}, 
+				rects = DS.fromList [R {ul = (34,37), ll = (34,18), lr = (41,18), ur = (41,37)},R {ul = (32,37), ll = (32,20), lr = (45,20), ur = (45,37)},R {ul = (29,46), ll = (29,16), lr = (35,16), ur = (35,46)}]}]}]},
+	Branch {hv = 3430, mbr = R {ul = (3,50), ll = (3,15), lr = (50,15), ur = (50,50)}, childs = DS.fromList [
+		Branch {hv = 2049, mbr = R {ul = (16,50), ll = (16,15), lr = (50,15), ur = (50,50)}, childs = DS.fromList [
+			Leaf {hv = 2064, mbr = R {ul = (22,49), ll = (22,15), lr = (50,15), ur = (50,49)}, 
+				rects = DS.fromList [R {ul = (22,48), ll = (22,37), lr = (49,37), ur = (49,48)},R {ul = (32,48), ll = (32,32), lr = (48,32), ur = (48,48)},R {ul = (34,49), ll = (34,15), lr = (50,15), ur = (50,49)}]},
+			Leaf {hv = 2105, mbr = R {ul = (20,46), ll = (20,26), lr = (47,26), ur = (47,46)}, 
+				rects = DS.fromList [R {ul = (22,38), ll = (22,26), lr = (42,26), ur = (42,38)},R {ul = (36,37), ll = (36,34), lr = (37,34), ur = (37,37)},R {ul = (20,46), ll = (20,26), lr = (47,26), ur = (47,46)}]},
+			Leaf {hv = 3407, mbr = R {ul = (16,50), ll = (16,22), lr = (47,22), ur = (47,50)}, 
+				rects = DS.fromList [R {ul = (38,44), ll = (38,22), lr = (47,22), ur = (47,44)},R {ul = (19,50), ll = (19,48), lr = (20,48), ur = (20,50)},R {ul = (16,48), ll = (16,48), lr = (38,48), ur = (38,48)}]}]},
+		Branch {hv = 3433, mbr = R {ul = (3,50), ll = (3,15), lr = (47,15), ur = (47,50)}, childs = DS.fromList [
+			Leaf {hv = 3390, mbr = R {ul = (13,48), ll = (13,32), lr = (47,32), ur = (47,48)}, 
+				rects = DS.fromList [R {ul = (22,47), ll = (22,39), lr = (40,39), ur = (40,47)},R {ul = (13,48), ll = (13,33), lr = (47,33), ur = (47,48)},R {ul = (21,32), ll = (21,32), lr = (40,32), ur = (40,32)}]},
+			Leaf {hv = 3429, mbr = R {ul = (15,50), ll = (15,15), lr = (40,15), ur = (40,50)}, 
+				rects = DS.fromList [R {ul = (21,50), ll = (21,15), lr = (40,15), ur = (40,50)},R {ul = (15,42), ll = (15,33), lr = (40,33), ur = (40,42)},R {ul = (18,47), ll = (18,18), lr = (21,18), ur = (21,47)}]},
+			Leaf {hv = 3533, mbr = R {ul = (3,45), ll = (3,38), lr = (33,38), ur = (33,45)}, 
+				rects = DS.fromList [R {ul = (17,39), ll = (17,39), lr = (21,39), ur = (21,39)},R {ul = (3,44), ll = (3,42), lr = (33,42), ur = (33,44)},R {ul = (10,45), ll = (10,38), lr = (29,38), ur = (29,45)}]}]},
+		Branch {hv = 3522, mbr = R {ul = (6,50), ll = (6,33), lr = (28,33), ur = (28,50)}, childs = DS.fromList [
+			Leaf {hv = 3522, mbr = R {ul = (7,50), ll = (7,33), lr = (28,33), ur = (28,50)}, 
+				rects = DS.fromList [R {ul = (12,42), ll = (12,39), lr = (28,39), ur = (28,42)},R {ul = (22,48), ll = (22,33), lr = (22,33), ur = (22,48)},R {ul = (7,50), ll = (7,45), lr = (28,45), ur = (28,50)}]},
+			Leaf {hv = 3627, mbr = R {ul = (6,48), ll = (6,33), lr = (12,33), ur = (12,48)}, 
+				rects = DS.fromList [R {ul = (6,48), ll = (6,33), lr = (12,33), ur = (12,48)}]}]}]}]}
+rsearch = R {ul = (3,32), ll = (3,21), lr = (26,21), ur = (26,32)}
+lrsearch = [R {ul = (1,35), ll = (1,23), lr = (22,23), ur = (22,35)},R {ul = (17,50), ll = (17,4), lr = (30,4), ur = (30,50)},R {ul = (9,47), ll = (9,2), lr = (33,2), ur = (33,47)},R {ul = (18,39), ll = (18,15), lr = (34,15), ur = (34,39)},R {ul = (10,48), ll = (10,4), lr = (38,4), ur = (38,48)},R {ul = (10,37), ll = (10,25), lr = (50,25), ur = (50,37)},R {ul = (21,50), ll = (21,6), lr = (39,6), ur = (39,50)},R {ul = (14,25), ll = (14,20), lr = (47,20), ur = (47,25)},R {ul = (25,24), ll = (25,8), lr = (39,8), ur = (39,24)},R {ul = (22,38), ll = (22,26), lr = (42,26), ur = (42,38)},R {ul = (20,46), ll = (20,26), lr = (47,26), ur = (47,46)},R {ul = (21,50), ll = (21,15), lr = (40,15), ur = (40,50)}]
