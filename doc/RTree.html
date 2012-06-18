@@ -1,0 +1,60 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>RTree</title><link href="ocean.css" rel="stylesheet" type="text/css" title="Ocean" /><script src="haddock-util.js" type="text/javascript"></script><script type="text/javascript">//<![CDATA[
+window.onload = function () {pageLoad();setSynopsis("mini_RTree.html");};
+//]]>
+</script></head><body><div id="package-header"><ul class="links" id="page-menu"><li><a href="index.html">Contents</a></li><li><a href="doc-index.html">Index</a></li></ul><p class="caption" class="empty">&nbsp;</p></div><div id="content"><div id="module-header"><p class="caption">RTree</p></div><div id="table-of-contents"><p class="caption">Contents</p><ul><li><a href="#g:1">Tipos exportados.
+</a></li><li><a href="#g:2">Funciones sobre Rectangulos
+</a><ul><li><a href="#g:3">Constructores
+</a></li><li><a href="#g:4">Comparacion
+</a></li></ul></li><li><a href="#g:5">Funciones sobre el Arbol
+</a><ul><li><a href="#g:6">Constructores.
+</a></li><li><a href="#g:7">funciones basicas
+</a></li><li><a href="#g:8">Pruebas
+</a></li></ul></li></ul></div><div id="description"><p class="caption">Description</p><div class="doc"><p><em>Hilbert R-Tree</em>
+</p><p>Programacin Funcional Avanzada (CI4251)
+</p><ol><li>1 2012-06-17
+</li></ol><p>Johan Gonzlez	07-40979
+</p><p>Andreina Garca	08-10406
+</p><p>Este mdulo implanta una estructura de datos que almacena y consulta 
+  datos geomtricos de rectngulos, dicha estructura es un R-Tree de 
+  Hilbert.
+</p></div></div><div id="synopsis"><p id="control.syn" class="caption expander" onclick="toggleSection('syn')">Synopsis</p><ul id="section.syn" class="hide" onclick="toggleSection('syn')"><li class="src short"><span class="keyword">data</span>  <a href="#t:Rectangle">Rectangle</a>  = <a href="#v:R">R</a> {<ul class="subs"><li><a href="#v:ul">ul</a> :: <a href="RTree.html#t:Point">Point</a></li><li><a href="#v:ll">ll</a> :: <a href="RTree.html#t:Point">Point</a></li><li><a href="#v:lr">lr</a> :: <a href="RTree.html#t:Point">Point</a></li><li><a href="#v:ur">ur</a> :: <a href="RTree.html#t:Point">Point</a></li></ul>}</li><li class="src short"><span class="keyword">data</span>  <a href="#t:RTree">RTree</a> <ul class="subs"><li>= <a href="#v:Branch">Branch</a> { <ul class="subs"><li><a href="#v:hv">hv</a> :: HV</li><li><a href="#v:mbr">mbr</a> :: <a href="RTree.html#t:Rectangle">Rectangle</a></li><li><a href="#v:childs">childs</a> :: Set <a href="RTree.html#t:RTree">RTree</a></li></ul> }</li><li>| <a href="#v:Leaf">Leaf</a> { <ul class="subs"><li><a href="#v:hv">hv</a> :: HV</li><li><a href="#v:mbr">mbr</a> :: <a href="RTree.html#t:Rectangle">Rectangle</a></li><li><a href="#v:rects">rects</a> :: Set <a href="RTree.html#t:Rectangle">Rectangle</a></li></ul> }</li><li>| <a href="#v:Empty">Empty</a>  </li></ul></li><li class="src short"><span class="keyword">type</span> <a href="#t:Point">Point</a> = (Int, Int)</li><li class="src short"><a href="#v:makeRect4">makeRect4</a> :: [Int] -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a></li><li class="src short"><a href="#v:makeRect2">makeRect2</a> :: <a href="RTree.html#t:Point">Point</a> -&gt; <a href="RTree.html#t:Point">Point</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a></li><li class="src short"><a href="#v:intersects">intersects</a> :: <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Bool</li><li class="src short"><a href="#v:orderHV">orderHV</a> :: <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Ordering</li><li class="src short"><a href="#v:fromList">fromList</a> :: [<a href="RTree.html#t:Rectangle">Rectangle</a>] -&gt; <a href="RTree.html#t:RTree">RTree</a></li><li class="src short"><a href="#v:fromList-39-">fromList'</a> :: Foldable t =&gt; t <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; <a href="RTree.html#t:RTree">RTree</a></li><li class="src short"><a href="#v:insert">insert</a> :: <a href="RTree.html#t:RTree">RTree</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Either String <a href="RTree.html#t:RTree">RTree</a></li><li class="src short"><a href="#v:delete">delete</a> :: <a href="RTree.html#t:RTree">RTree</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Either String <a href="RTree.html#t:RTree">RTree</a></li><li class="src short"><a href="#v:search">search</a> :: <a href="RTree.html#t:RTree">RTree</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Maybe [<a href="RTree.html#t:Rectangle">Rectangle</a>]</li><li class="src short"><a href="#v:test">test</a> :: IO ()</li></ul></div><div id="interface"><h1 id="g:1">Tipos exportados.
+</h1><div class="top"><p class="src"><span class="keyword">data</span>  <a name="t:Rectangle" class="def">Rectangle</a>  </p><div class="subs constructors"><p class="caption">Constructors</p><table><tr><td class="src"><a name="v:R" class="def">R</a></td><td class="doc empty">&nbsp;</td></tr><tr><td colspan="2"><div class="subs fields"><p class="caption">Fields</p><dl><dt class="src"><a name="v:ul" class="def">ul</a> :: <a href="RTree.html#t:Point">Point</a></dt><dd class="doc"><p>Vertice superior izquierdo   (X0,Y1)
+</p></dd><dt class="src"><a name="v:ll" class="def">ll</a> :: <a href="RTree.html#t:Point">Point</a></dt><dd class="doc"><p>Vertice inferior izquierdo   (X0,Y0)
+</p></dd><dt class="src"><a name="v:lr" class="def">lr</a> :: <a href="RTree.html#t:Point">Point</a></dt><dd class="doc"><p>Vertice inferior derecho     (X1,Y0)
+</p></dd><dt class="src"><a name="v:ur" class="def">ur</a> :: <a href="RTree.html#t:Point">Point</a></dt><dd class="doc"><p>Vertice superior derecho     (X1,Y1)
+</p></dd></dl><div class="clear"></div></div></td></tr></table></div></div><div class="top"><p class="src"><span class="keyword">data</span>  <a name="t:RTree" class="def">RTree</a>  </p><div class="subs constructors"><p class="caption">Constructors</p><table><tr><td class="src"><a name="v:Branch" class="def">Branch</a></td><td class="doc"><p>Rama del rbol
+</p></td></tr><tr><td colspan="2"><div class="subs fields"><p class="caption">Fields</p><dl><dt class="src"><a name="v:hv" class="def">hv</a> :: HV</dt><dd class="doc empty">&nbsp;</dd><dt class="src"><a name="v:mbr" class="def">mbr</a> :: <a href="RTree.html#t:Rectangle">Rectangle</a></dt><dd class="doc empty">&nbsp;</dd><dt class="src"><a name="v:childs" class="def">childs</a> :: Set <a href="RTree.html#t:RTree">RTree</a></dt><dd class="doc empty">&nbsp;</dd></dl><div class="clear"></div></div></td></tr><tr><td class="src"><a name="v:Leaf" class="def">Leaf</a></td><td class="doc"><p>Hoja del rbol
+</p></td></tr><tr><td colspan="2"><div class="subs fields"><p class="caption">Fields</p><dl><dt class="src"><a name="v:hv" class="def">hv</a> :: HV</dt><dd class="doc empty">&nbsp;</dd><dt class="src"><a name="v:mbr" class="def">mbr</a> :: <a href="RTree.html#t:Rectangle">Rectangle</a></dt><dd class="doc empty">&nbsp;</dd><dt class="src"><a name="v:rects" class="def">rects</a> :: Set <a href="RTree.html#t:Rectangle">Rectangle</a></dt><dd class="doc empty">&nbsp;</dd></dl><div class="clear"></div></div></td></tr><tr><td class="src"><a name="v:Empty" class="def">Empty</a></td><td class="doc"><p>rbol vacio
+</p></td></tr></table></div></div><div class="top"><p class="src"><span class="keyword">type</span> <a name="t:Point" class="def">Point</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">&nbsp;= (Int, Int)</td><td class="doc"><p>(X,Y)
+</p></td></tr></table></div></div><h1 id="g:2">Funciones sobre Rectangulos
+</h1><h2 id="g:3">Constructores
+</h2><div class="top"><p class="src"><a name="v:makeRect4" class="def">makeRect4</a> :: [Int] -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a></p><div class="doc"><p><code>makeRect4</code> permite construir un rectngulo a partir de una lista 
+  de 8 enteros.
+</p></div></div><div class="top"><p class="src"><a name="v:makeRect2" class="def">makeRect2</a> :: <a href="RTree.html#t:Point">Point</a> -&gt; <a href="RTree.html#t:Point">Point</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a></p><div class="doc"><p><code>makeRect2</code> permite construir un rectngulo a partir de 2 puntos en
+  el espacio.
+</p></div></div><h2 id="g:4">Comparacion
+</h2><div class="top"><p class="src"><a name="v:intersects" class="def">intersects</a> :: <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Bool</p><div class="doc"><p><code>intersects</code> determina si dos rectngulos se intersectan.
+</p></div></div><div class="top"><p class="src"><a name="v:orderHV" class="def">orderHV</a> :: <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Ordering</p><div class="doc"><p><code>orderHV</code> establece la comparacin de dos rectangulos segun su nmero 
+  de Hilbert.
+</p></div></div><h1 id="g:5">Funciones sobre el Arbol
+</h1><h2 id="g:6">Constructores.
+</h2><div class="top"><p class="src"><a name="v:fromList" class="def">fromList</a> :: [<a href="RTree.html#t:Rectangle">Rectangle</a>] -&gt; <a href="RTree.html#t:RTree">RTree</a></p><div class="doc"><p><code>fromList</code> construye un rbol a partir de una lista de rectngulos.
+</p></div></div><div class="top"><p class="src"><a name="v:fromList-39-" class="def">fromList'</a> :: Foldable t =&gt; t <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; <a href="RTree.html#t:RTree">RTree</a></p><div class="doc"><p><code>fromList'</code>  contruye un rbol a partir de un conjunto de rectngulos
+  utilizando la operacin de <code>insert</code>.
+</p></div></div><h2 id="g:7">funciones basicas
+</h2><div class="top"><p class="src"><a name="v:insert" class="def">insert</a> :: <a href="RTree.html#t:RTree">RTree</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Either String <a href="RTree.html#t:RTree">RTree</a></p><div class="doc"><p><code>insert</code> inserta un rectngulo en un rbol.
+</p><p>Si el rectngulo ya se encuentra en el rbol se reporta un error
+  de rectngulo duplicado.
+</p><p>Si no, se devulve el nuevo rbol.
+</p></div></div><div class="top"><p class="src"><a name="v:delete" class="def">delete</a> :: <a href="RTree.html#t:RTree">RTree</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Either String <a href="RTree.html#t:RTree">RTree</a></p><div class="doc"><p><code>delete</code> elimina un rectngulo de un rbol.
+</p><p>Si el rectngulo se encuentra en el rbol se retorne un nuevo arbol
+  que no contiene al rectngulo. 
+</p><p>En caso contrario reporta un error de rectngulo no encontrado.
+</p></div></div><div class="top"><p class="src"><a name="v:search" class="def">search</a> :: <a href="RTree.html#t:RTree">RTree</a> -&gt; <a href="RTree.html#t:Rectangle">Rectangle</a> -&gt; Maybe [<a href="RTree.html#t:Rectangle">Rectangle</a>]</p><div class="doc"><p><code>search</code> busca todos los rectngulos que se solapen con un 
+  rectngulo dado.
+</p><p>Si no existen solapamientos con el rectngulo suministrado no se 
+  devuelve nada.
+</p><p>Si existen se devuelve una lista de todos los rectngulos solapados. 
+</p></div></div><h2 id="g:8">Pruebas
+</h2><div class="top"><p class="src"><a name="v:test" class="def">test</a> :: IO ()</p><div class="doc"><p><code>test</code> ejecuta todas las pruebas de quickcheck.
+</p></div></div></div></div><div id="footer"><p>Produced by <a href="http://www.haskell.org/haddock/">Haddock</a> version 2.9.2</p></div></body></html>

@@ -388,10 +388,6 @@ insert (Branch _hv _rec trees) r = case (elegirTree trees) of
 		arbol :: DS.Set RTree -> RTree
 		arbol cjto
 			| DS.null (fst (DS.partition f cjto)) = DS.findMin cjto
-{-
-  @main@   ???
- -}
--- main :: IO ()
 			| otherwise = DS.findMax (fst (DS.partition f cjto))
 		f :: RTree -> Bool
 		f tree = hv tree < hilbval r
@@ -657,8 +653,8 @@ prop_empty_search :: Rectangle -> Bool
 prop_empty_search r = (search Empty r) == Nothing
 
 
-{-
-  @test@ ejecuta todas las pruebas.
+{- |
+  @test@ ejecuta todas las pruebas de quickcheck.
  -}
 test :: IO()
 test = do
