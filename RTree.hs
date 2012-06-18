@@ -259,7 +259,7 @@ boundingBox = F.foldr1 f
   rectángulos.
  -}
 makeLeaf ::  DS.Set Rectangle -> RTree
-makeLeaf ls = Leaf (hilbval br) (br) (ls)
+makeLeaf ls = Leaf (hilbval (DS.findMax ls)) (br) (ls)
 	where
 		br = boundingBox ls
 
@@ -269,7 +269,7 @@ makeLeaf ls = Leaf (hilbval br) (br) (ls)
   árboles, sean hojas o ramas.
  -}
 makeBranch ::  DS.Set RTree -> RTree
-makeBranch ls = Branch (hilbval br) (br) (ls)
+makeBranch ls = Branch (hv (DS.findMax ls)) (br) (ls)
 	where
 		br = boundingBox (DS.map mbr ls)
 
@@ -293,8 +293,11 @@ raiseTree ls = raiseTree $ roots ls where
   @fromList@ construye un árbol a partir de una lista de rectángulos.
  -}
 fromList ::  [Rectangle] -> RTree
-fromList = raiseTree . leaves . DL.sortBy orderHV
+fromList listr = case (go listr) of
+	l@(Leaf _hv _rec rs) -> makeBranch $ DS.singleton l
+	otherwise -> go listr
 	where 
+		go = raiseTree . leaves . DL.sortBy orderHV
 		leaves  = leaves' [] 
 		leaves' res [] = reverse res
 		leaves' res s  = leaves' ((makeLeaf (DS.fromList rec)):res ) rest where
@@ -361,7 +364,10 @@ overflow (Branch _hv _rec ts) trees
   manejarlo según sea el caso.
  -}
 overflowHandling :: RTree -> RTree
-overflowHandling (Branch _hv _rec ts) = overflow (DS.findMin ts) ts
+overflowHandling (Branch _hv _rec ts)
+	| hv (overflow (DS.findMin ts) ts) == 0 = 
+		makeBranch (childs (overflow (DS.findMin ts) ts))
+	| otherwise = overflow (DS.findMin ts) ts
 
 
 {-|
@@ -373,7 +379,8 @@ overflowHandling (Branch _hv _rec ts) = overflow (DS.findMin ts) ts
   Si no, se devulve el nuevo árbol.
  -}
 insert :: RTree -> Rectangle -> Either String RTree
-insert Empty r = return $ makeLeaf $ DS.singleton r
+insert Empty r = 
+	return $ makeBranch $ DS.singleton $ makeLeaf $ DS.singleton r
 insert (Leaf _hv _rec rs) r 
 	| DS.size (DS.insert r rs) == DS.size rs = throwError "DuplicateRectangle"
 	| otherwise = return $ makeLeaf $ DS.insert r rs
@@ -388,10 +395,6 @@ insert (Branch _hv _rec trees) r = case (elegirTree trees) of
 		arbol :: DS.Set RTree -> RTree
 		arbol cjto
 			| DS.null (fst (DS.partition f cjto)) = DS.findMin cjto
-{-
-  @main@   ???
- -}
--- main :: IO ()
 			| otherwise = DS.findMax (fst (DS.partition f cjto))
 		f :: RTree -> Bool
 		f tree = hv tree < hilbval r
@@ -465,21 +468,18 @@ search (Branch _hv br rs) r
 intersects ::  Rectangle -> Rectangle -> Bool
 intersects r1 r2 = ins r1 r2 || ins r2 r1
 	where
-		ins b a =((bx0 < ax1 && ax1 <= bx1) && 
-					((by0 <= ay0 && ay0 < by1) || 
-					(by0 < ay1 && ay1 <= by1))) ||
-				((by0 < ay1 && ay1 <= by1) && 
-					((bx0 <= ax0 && ax0 < bx1) || 
-					(bx0 < ax1 && ax1 <= bx1)))
-				where
-					ax0 = fst $ ll a
-					bx0 = fst $ ll b
-					ax1 = fst $ ur a
-					bx1 = fst $ ur b
-					ay0 = snd $ ll a
-					by0 = snd $ ll b
-					ay1 = snd $ ur a
-					by1 = snd $ ur b
+		ins b a =
+			((bx0 < ax1 && ax1 <= bx1) && ((by0 <= ay0 && ay0 < by1) || 
+			(by0 < ay1 && ay1 <= by1))) || ((by0 < ay1 && ay1 <= by1) && 
+			((bx0 <= ax0 && ax0 < bx1) || (bx0 < ax1 && ax1 <= bx1)))
+		ax0 = fst $ ll r1
+		bx0 = fst $ ll r2
+		ax1 = fst $ ur r1
+		bx1 = fst $ ur r2
+		ay0 = snd $ ll r1
+		by0 = snd $ ll r2
+		ay1 = snd $ ur r1
+		by1 = snd $ ur r2
 
 
 {-
@@ -542,6 +542,7 @@ prop_member_insert t r = case (insert t r) of
 	Right tree -> (DS.member r (treeToSet tree)) && 
 					not (DS.member r (treeToSet t)) &&
 					(DS.insert r (treeToSet t)) == (treeToSet tree)
+					&& (prop_hv tree)
 	otherwise -> DS.member r $ treeToSet t
 
 
@@ -560,10 +561,12 @@ prop_ord_insert :: RTree -> Rectangle -> Bool
 prop_ord_insert t r = case (insert t r) of
 	Right tree -> if (not (DS.null (mayor tree)) && not (DS.null (menor tree)))
 		then (hilbval (DS.findMin (mayor tree)) >= hilbval r) &&
-			(hilbval (DS.findMax (menor tree)) <= hilbval r)
+			(hilbval (DS.findMax (menor tree)) <= hilbval r) && (prop_hv tree)
 		else if (not (DS.null (mayor tree)))
-			then hilbval (DS.findMin (mayor tree)) >= hilbval r
-			else hilbval (DS.findMax (menor tree)) <= hilbval r
+			then hilbval (DS.findMin (mayor tree)) >= hilbval r 
+				&& (prop_hv tree)
+			else hilbval (DS.findMax (menor tree)) <= hilbval r 
+				&& (prop_hv tree)
 	otherwise -> DS.member r $ treeToSet t
 	where
 		menor = fst . DS.split r . treeToSet
@@ -580,7 +583,8 @@ prop_ord_insert t r = case (insert t r) of
  -}
 prop_empty_insert :: Rectangle -> Bool
 prop_empty_insert r = case (insert Empty r) of
-	Right t -> makeLeaf (DS.singleton r) == t
+	Right t -> (makeBranch (DS.singleton (makeLeaf (DS.singleton r))) == t) 
+				&& (prop_hv t)
 
 
 {-
@@ -594,6 +598,7 @@ prop_empty_insert r = case (insert Empty r) of
 prop_tall_delete :: RTree -> Rectangle -> Bool
 prop_tall_delete t r = if (DS.member r (treeToSet t)) 
 	then snd (tall (head (rights [delete t r]))) <= snd (tall t)
+		&& (prop_hv (head (rights [delete t r])))
 	else delete t r == throwError "RectangleNotFound"
 
 
@@ -610,7 +615,7 @@ prop_tall_delete t r = if (DS.member r (treeToSet t))
 prop_member_delete :: RTree -> Rectangle -> Bool
 prop_member_delete t r = case (delete t r) of
 	Right tree -> not (DS.member r (treeToSet tree)) && 
-					(DS.member r (treeToSet t))
+					(DS.member r (treeToSet t)) && (prop_hv tree)
 	otherwise -> not $ DS.member r $ treeToSet t
 
 
@@ -657,11 +662,35 @@ prop_empty_search :: Rectangle -> Bool
 prop_empty_search r = (search Empty r) == Nothing
 
 
+{-|
+  @prop_hv@ representa la propiedad que debe cumplir /todo/ RTree de Hilbert.
+  
+  Si una hoja tiene un hv=N ninguno de sus rectángulos puede superar ese hv;
+  lo mismo se cumple entre una rama y sus hijos.
+  
+  Adicionalmente, ninguna hoja o rama puede superar su capacidad.
+ -}
+prop_hv :: RTree -> Bool
+prop_hv Empty = True
+prop_hv (Leaf val _rec rs) = 
+	(DS.fold f True rs) && DS.size rs <= leafCapacity
+	where
+		f :: Rectangle -> Bool -> Bool
+		f r b = b && (hilbval r) <= val
+prop_hv (Branch val _rec ts) = 
+	(DS.fold f True ts) && DS.size ts <= nodeCapacity
+	where
+		f :: RTree -> Bool -> Bool
+		f t b = b && (hv t) <= val && (prop_hv t)
+
+
 {-
   @test@ ejecuta todas las pruebas.
  -}
 test :: IO()
 test = do
+	putStrLn "hilbert value y capacity"
+	quickCheck prop_hv
 	putStrLn "member insert"
 	quickCheck prop_member_insert
 	putStrLn "ord insert"
@@ -681,5 +710,3 @@ test = do
 	putStrLn "empty delete"
 	quickCheck prop_empty_delete
 	putStrLn "Done!"
-
-
