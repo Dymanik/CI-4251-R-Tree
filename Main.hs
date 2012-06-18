@@ -27,7 +27,11 @@
   indicando operaciones exitosas y erróneas.
 -}
 
---module Main where
+module Main (
+	-- * Funciones exportadas.
+		-- ** Comienza la ejecución de la aplicación.
+	main
+) where
 
 import RTree
 --import Data.List.Split
@@ -78,15 +82,15 @@ instance Show Stats where
 		"Busquedas exitosas: " ++ (show $ goodSearches s) ++
 		" Busquedas sin solapamientos: " ++ (show $ badSearches s)
 	show s@(Stats {modified=True}) =  
-		"Base de datos original:\nBusquedas exitosas: " ++
-		(show $ goodSearches s) ++ " Busquedas sin solapamientos: " ++
-		(show $ badSearches s) ++ "\nBase de datos modificada:\n" ++
-		"Busquedas exitosas: " ++ (show $ mgoodSearches s) ++ 
-		" Busquedas sin solapamientos: " ++ (show $ mbadSearches s) ++ 
-		" Inserciones exitosas: " ++ (show $ mgoodInserts s) ++ 
-		" Inserciones duplicadas: " ++ (show $ mbadInserts s) ++ 
-		" Eliminaciones exitosas: " ++ (show $ mgoodDeletes s) ++ 
-		" Eliminaciones inexistentes: " ++ (show $ mbadDeletes s)
+		"\nBase de datos original:\n\tBusquedas exitosas: " ++
+		(show $ goodSearches s) ++ "\n\tBusquedas sin solapamientos: " ++
+		(show $ badSearches s) ++ "\n\nBase de datos modificada:\n" ++
+		"\tBusquedas exitosas: " ++ (show $ mgoodSearches s) ++ 
+		"\n\tBusquedas sin solapamientos: " ++ (show $ mbadSearches s) ++ 
+		"\n\tInserciones exitosas: " ++ (show $ mgoodInserts s) ++ 
+		"\n\tInserciones duplicadas: " ++ (show $ mbadInserts s) ++ 
+		"\n\tEliminaciones exitosas: " ++ (show $ mgoodDeletes s) ++ 
+		"\n\tEliminaciones inexistentes: " ++ (show $ mbadDeletes s)
 
 
 {-
@@ -211,7 +215,7 @@ cmdPoint = liftM2 (,) (read <$> cmdNum) (read <$> cmdNum)
  -}
 -- printHelp :: IO ()
 printHelp = do
-	putStrLn "Comandos disponibles: "
+	putStrLn "\nComandos disponibles: "
 	putStrLn "\tsearch x0 y0 x1 y1 n"
 	putStrLn "\tinsert x0 y0 x1 y1"
 	putStrLn "\tdelete x0 y0 x1 y1"
@@ -223,7 +227,7 @@ printHelp = do
  -}
 mainLoop :: ReaderT RTree (StateT Stats IO) ()
 mainLoop = do
-	liftIO $ putStr ">" *> hFlush stdout
+	liftIO $ putStr "\n>" *> hFlush stdout
 	l <- liftIO getLine
 	st <- lift get
 	if modified st 
@@ -271,7 +275,7 @@ mainLoop = do
 				Right Exit -> do 
 					st <- lift get 
 					liftIO $ putStrLn $ show st 
-					liftIO $ putStrLn "Salir"
+					liftIO $ putStrLn "La aplicacion se ha cerrado.\n"
 				Left x	-> do
 					liftIO $ print x
 					liftIO $ printHelp
@@ -313,7 +317,7 @@ mainLoop = do
 				Right Exit -> do 
 					st <- lift get 
 					liftIO $ putStrLn $ show st 
-					liftIO $ putStrLn "Salir"
+					liftIO $ putStrLn "La aplicacion se ha cerrado.\n"
 				Left x	-> do
 					liftIO $ print x
 					liftIO $ printHelp
@@ -355,15 +359,15 @@ main = do
  -}
 loadFile:: [String] -> IO RTree
 loadFile [] = 
-	putStrLn "No se especifico la base de datos inicial" >> return Empty
+	putStrLn "No se especifico la base de datos inicial\n" >> return Empty
 loadFile a = do
 	f <- readFile (head a)
 	either (e) (ld) (parseRects f) where
 		ld rs = do
-			putStrLn ("Leidos "++show (length rs) ++" rectangulos desde el archivo "++head a)
+			putStrLn ("Leidos "++show (length rs) ++" rectangulos desde el archivo "++head a++"\n")
 			return (fromList' rs)
 		e err = do
-			putStrLn ("Error leyendo el archivo")
+			putStrLn ("Error leyendo el archivo\n")
 			putStrLn $ show err
 			return Empty
 
