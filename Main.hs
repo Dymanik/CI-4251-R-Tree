@@ -120,13 +120,6 @@ filerects = (sepBy1 (many1 digit) (comma)) <* newline
 
 
 {-
-  @readInt@   ???
- -}
-readInt :: String -> Int
-readInt s = read s::Int
-
-
-{-
   @comma@ reconoce una coma.
  -}
 -- comma ::   ???
@@ -322,20 +315,6 @@ mainLoop = do
 					liftIO $ print x
 					liftIO $ printHelp
 					mainLoop
-{-
-							then case search (modTree(stm)) r of
-							Nothing -> do
-								liftIO $ putStrLn "Modified database: Nothing found"
-								(lift $ put stm{mbadSearches=mbadSearches(stm)+1})
-								mainLoop
-							Just x -> do
-								liftIO $ putStrLn $ "Modified database: found "++show (length x)++" rectangles"
-								liftIO $ print $ take n x
-								(lift $ put stm{mgoodSearches=mgoodSearches(stm)+1})
-								mainLoop
-						else mainLoop
--}
-
 
 {-
   @main@   ???
@@ -365,30 +344,9 @@ loadFile a = do
 	either (e) (ld) (parseRects f) where
 		ld rs = do
 			putStrLn ("Leidos "++show (length rs) ++" rectangulos desde el archivo "++head a++"\n")
-			return (fromList' rs)
+			return (fromList rs)
 		e err = do
 			putStrLn ("Error leyendo el archivo\n")
 			putStrLn $ show err
 			return Empty
 
-
-
---create :: Rectangle -> RTree -> RTree
---create r t = insert t r
-{-
-rtree :: String -> IO ()
-rtree arch
-	| null arch = do
-		putStrLn "No se indicó base de datos inicial."
-		--return $ Leaf $ DS.empty
-	| otherwise = do
-		content <- readFile arch
-		let badRects = numericMatrix $ map (splitOn ",") (lines content)
-		let goodRects = filter goodR badRects
-		putStrLn $ "Leídos " ++ show (length goodRects) ++
-					" rectángulos desde el archivo " ++ arch
-		-- nub es n cuadrado... mejorar si se puede
-		let rects = DLO.nubSortOn orderHV (map createRect goodRects)
-		putStrLn $ show rects
-		--return $ foldl create (Leaf $ DS.empty) rects
--}

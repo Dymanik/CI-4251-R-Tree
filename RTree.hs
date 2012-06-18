@@ -462,22 +462,23 @@ search (Branch _hv br rs) r
   @intersects@ determina si dos rectángulos se intersectan.
  -}
 intersects ::  Rectangle -> Rectangle -> Bool
-intersects a b = 
-	((bx0 < ax1 && ax1 <= bx1) && 
-		((by0 <= ay0 && ay0 < by1) || 
-		(by0 < ay1 && ay1 <= by1))) ||
-	((by0 < ay1 && ay1 <= by1) && 
-		((bx0 <= ax0 && ax0 < bx1) || 
-		(bx0 < ax1 && ax1 <= bx1)))
+intersects r1 r2 = ins r1 r2 || ins r2 r1
 	where
-		ax0 = fst $ ll a
-		bx0 = fst $ ll b
-		ax1 = fst $ ur a
-		bx1 = fst $ ur b
-		ay0 = snd $ ll a
-		by0 = snd $ ll b
-		ay1 = snd $ ur a
-		by1 = snd $ ur b
+		ins b a =((bx0 < ax1 && ax1 <= bx1) && 
+					((by0 <= ay0 && ay0 < by1) || 
+					(by0 < ay1 && ay1 <= by1))) ||
+				((by0 < ay1 && ay1 <= by1) && 
+					((bx0 <= ax0 && ax0 < bx1) || 
+					(bx0 < ax1 && ax1 <= bx1)))
+				where
+					ax0 = fst $ ll a
+					bx0 = fst $ ll b
+					ax1 = fst $ ur a
+					bx1 = fst $ ur b
+					ay0 = snd $ ll a
+					by0 = snd $ ll b
+					ay1 = snd $ ur a
+					by1 = snd $ ur b
 
 
 {-
