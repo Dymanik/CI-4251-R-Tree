@@ -94,14 +94,15 @@ instance Show Stats where
 
 
 {-
-  @newStats@ crea un nuevo Stats inicial.
+  @newStats@ crea un nuevo Stats inicializado en 0.
  -}
 newStats ::  Stats
 newStats = Stats False 0 0 Empty 0 0 0 0 0 0
 
 
 {-
-  @parseRects@   ???
+  @parseRects@   lee los rectangulos de @s@ en formato x0,y0,x0,y1,x1,y1,x1,y0 por linea
+  y los devuelve en una lista
  -}
 parseRects :: String -> Either ParseError [Rectangle]
 parseRects s = 
@@ -112,28 +113,10 @@ parseRects s =
 				otherwise -> []
 			h = map read
 
-{-
-  @filerects@   ???
- -}
- -- filerects ::   ???
+--  @filerects@   lista de numeros separados por comas
 filerects = (sepBy1 (many1 digit) (comma)) <* newline
-
-
-{-
-  @comma@ reconoce una coma.
- -}
--- comma ::   ???
+--  @comma@ reconoce una coma.
 comma = (char ',')
-
-
-{-
-  @numericMatrix@ convierte una matriz de números en su forma de
-  String a una matriz de números enteros.
- -}
-numericMatrix :: [[String]] -> [[Int]]
-numericMatrix [] = []
-numericMatrix (x:xs) = (map read x):(numericMatrix xs)
-
 
 {-
   @goodR@ verifica que una lista de 8 enteros puedan formar un 
@@ -152,61 +135,38 @@ goodR [xa, ya, xb, yb, xc, yc, xd, yd] =
 parseCmd ::  String -> Either ParseError Cmd
 parseCmd s = parse (cmdInst) "" s
 
-
-{-
-  @cmdInst@   ???
- -}
--- cmdInst ::   ???
+-- @cmdInst@  comandos posibles
 cmdInst = choice [cmdDelete, cmdInsert, cmdSearch, cmdExit]
 
-{-
-  @cmdDelete@   ???
- -}
--- cmdDelete ::   ???
+-- @cmdDelete@  delete x0 y0 x1 y1
 cmdDelete = liftM Delete (string "delete " *> cmdRect <* spaces)
 
-{-
-  @cmdInsert@   ???
- -}
--- cmdInsert ::   ???
+-- @cmdInsert@   insert x0 y0 x1 y1
 cmdInsert = liftM Insert (string "insert " *> cmdRect <* spaces)
 
-{-
-  @cmdSearch@   ???
- -}
--- cmdSearch ::   ???
+--  @cmdSearch@  search x0 y0 x1 y1 n
 cmdSearch = 
 	liftM2 Search (string "search " *> cmdRect) (read <$> cmdNum <* spaces)
 
-{-
-  @cmdExit@   ???
- -}
--- cmdExit ::   ???
+-- @cmdExit@   kthxbye
 cmdExit = string "kthxbye" >> spaces >> return Exit
 
-{-
-  @cmdNum@   ???
- -}
--- cmdNum ::   ???
+--  @cmdNum@   numero 
 cmdNum = spaces *> many1 digit
 
-{-
-  @cmdRect@   ???
- -}
--- cmdRect ::   ???
+-- cmdRect  un rectangulo a partir de dos puntos
 cmdRect = liftM2 makeRect2 (cmdPoint) (cmdPoint)
 
 {-
-  @cmdPoint@   ???
+  @cmdPoint@   un punto a partir de dos numeros
  -}
--- cmdPoint ::   ???
 cmdPoint = liftM2 (,) (read <$> cmdNum) (read <$> cmdNum)
 
 
 {-
-  @printHelp@   ???
+  @printHelp@   imprime los comandos disponibles
  -}
--- printHelp :: IO ()
+printHelp ::  IO ()
 printHelp = do
 	putStrLn "\nComandos disponibles: "
 	putStrLn "\tsearch x0 y0 x1 y1 n"
@@ -216,7 +176,10 @@ printHelp = do
 
 
 {-
-  @mainLoop@   ???
+  @mainLoop@   Ciclo principal del programa. Se encarga de la 
+  interaccion con el programa y mantener las estadisticas y las bases de
+  datos
+  
  -}
 mainLoop :: ReaderT RTree (StateT Stats IO) ()
 mainLoop = do
@@ -316,10 +279,6 @@ mainLoop = do
 					liftIO $ printHelp
 					mainLoop
 
-{-
-  @main@   ???
- -}
--- main :: IO ()
 main = do
 	a <- getArgs
 	sTree <- loadFile a

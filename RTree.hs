@@ -19,29 +19,26 @@
 
 module RTree (
 	-- * Tipos exportados.
-		-- ** Rectángulos.
 	Rectangle (..),
-		-- ** Árbol de almacenamiento y consulta de rectángulos.
 	RTree (..),
-		-- ** Punto en el espacio de coordenadas X y Y.
 	Point (..),
-	-- * Funciones exportadas.
-		-- ** Permite la comparación de dos rectángulos según su número de Hilbert
-	orderHV,
-		-- ** Agrega un nuevo rectángulo a la estructura. Insertar un rectángulo duplicado es causa de error.
-	insert,
-		-- ** Elimina un rectángulo presente en la estructura. Eliminar un rectángulo inexistente es causa de error.
-	delete,
-		-- ** Consulta la estructura para determinar si el rectángulo suministrado como parámetro se solapa con uno o más rectángulos en la estructura. El resultado de la función es la lista de rectángulos solapados.
-	search,
-		-- ** Construye un RTree a partir de una lista de rectángulos.
+	-- * Funciones sobre Rectangulos
+		-- ** Constructores
+		makeRect4,
+		makeRect2,
+		-- ** Comparacion
+		intersects,
+		orderHV,
+	-- * Funciones sobre el Arbol
+		-- ** Constructores.
 	fromList,
-		-- ** Construye un RTree a partir de un conjunto de rectángulos.
 	fromList',
-		-- ** Construye un Rectangle a partir de una lista de 8 enteros.
-	makeRect4,
-		-- * Construye un Rectangle a partir de dos Point.
-	makeRect2
+		-- ** funciones basicas
+	insert,
+	delete,
+	search,
+		-- ** Pruebas
+	test
 ) 
 where
 
@@ -391,6 +388,10 @@ insert (Branch _hv _rec trees) r = case (elegirTree trees) of
 		arbol :: DS.Set RTree -> RTree
 		arbol cjto
 			| DS.null (fst (DS.partition f cjto)) = DS.findMin cjto
+{-
+  @main@   ???
+ -}
+-- main :: IO ()
 			| otherwise = DS.findMax (fst (DS.partition f cjto))
 		f :: RTree -> Bool
 		f tree = hv tree < hilbval r
@@ -458,7 +459,7 @@ search (Branch _hv br rs) r
 	| otherwise = Nothing
 
 
-{-
+{- |
   @intersects@ determina si dos rectángulos se intersectan.
  -}
 intersects ::  Rectangle -> Rectangle -> Bool
@@ -682,52 +683,3 @@ test = do
 	putStrLn "Done!"
 
 
---------------------------------------------------------------------------------
-
-
--- ARBOL DE PRUEBA
-a = R {ll=(30,40), ul=(30,55), ur=(35,55), lr=(35,40)}
-b = R {ll=(20,15), ul=(20,25), ur=(30,25), lr=(30,15)}
-c = R {ll=(30,40), ul=(30,55), ur=(35,55), lr=(35,40)}
-d = R {ll=(33,30), ul=(33,43), ur=(37,43), lr=(37,30)}
-a2 = R {ll=(10,5), ul=(10,80), ur=(50,80), lr=(50,5)}
-no = R {ll=(30,15), ul=(30,25), ur=(40,25), lr=(40,15)}
-enlos2 = R (10,80) (10,30) (72,30) (72,80)
-hoja1 = makeLeaf (DS.fromList [b,d,c])
-papa1 = R {ll=(10,5), ul=(10,80), ur=(50,80), lr=(50,5)}
-x = R {ll=(65,50), ul=(65,55), ur=(70,55), lr=(70,50)}
-y = R {ll=(75,40), ul=(75,50), ur=(80,50), lr=(80,40)}
-hoja2 = makeLeaf (DS.fromList [x,y])
-papa2 = R {ll=(40,30), ul=(40,90), ur=(90,90), lr=(90,30)}
-papa = R (0,100) (0,0) (100,0) (100,100)
-arbolp = makeBranch (DS.fromList [
-	makeBranch (DS.fromList [hoja1]),
-	makeBranch (DS.fromList [hoja2])])
-
-
-
--- problemas con el fromList: me elimina una hoja de la nada :S
-ainsert = Branch {hv = 653, mbr = R {ul = (2,50), ll = (2,2), lr = (49,2), ur = (49,50)}, childs = DS.fromList [
-Leaf {hv = 564, mbr = R {ul = (2,41), ll = (2,2), lr = (37,2), ur = (37,41)}, rects = DS.fromList [R {ul = (5,30), ll = (5,15), lr = (37,15), ur = (37,30)},R {ul = (2,41), ll = (2,2), lr = (33,2), ur = (33,41)},R {ul = (8,29), ll = (8,23), lr = (32,23), ur = (32,29)}]},
-Leaf {hv = 2105, mbr = R {ul = (17,50), ll = (17,23), lr = (49,23), ur = (49,50)}, rects = DS.fromList [R {ul = (44,36), ll = (44,23), lr = (46,23), ur = (46,36)},R {ul = (30,50), ll = (30,28), lr = (41,28), ur = (41,50)},R {ul = (17,50), ll = (17,36), lr = (49,36), ur = (49,50)}]},
-Leaf {hv = 3404, mbr = R {ul = (20,44), ll = (20,29), lr = (41,29), ur = (41,44)}, rects = DS.fromList [R {ul = (39,43), ll = (39,42), lr = (41,42), ur = (41,43)},R {ul = (20,44), ll = (20,29), lr = (35,29), ur = (35,44)}]}]}
-
-rinsert = R {ul = (34,37), ll = (34,30), lr = (47,30), ur = (47,37)}
-
-a2insert = Branch {hv = 653, mbr = R {ul = (2,50), ll = (2,2), lr = (49,2), ur = (49,50)}, childs = DS.fromList [
-Leaf {hv = 564, mbr = R {ul = (2,41), ll = (2,2), lr = (37,2), ur = (37,41)}, rects = DS.fromList [R {ul = (5,30), ll = (5,15), lr = (37,15), ur = (37,30)},R {ul = (2,41), ll = (2,2), lr = (33,2), ur = (33,41)},R {ul = (8,29), ll = (8,23), lr = (32,23), ur = (32,29)}]},
-Leaf {hv = 2105, mbr = R {ul = (17,50), ll = (17,23), lr = (49,23), ur = (49,50)}, rects = DS.fromList [R {ul = (44,36), ll = (44,23), lr = (46,23), ur = (46,36)},R {ul = (30,50), ll = (30,28), lr = (41,28), ur = (41,50)},R {ul = (17,50), ll = (17,36), lr = (49,36), ur = (49,50)},R {ul = (34,37), ll = (34,30), lr = (47,30), ur = (47,37)}]},
-Leaf {hv = 3404, mbr = R {ul = (20,44), ll = (20,29), lr = (41,29), ur = (41,44)}, rects = DS.fromList [R {ul = (39,43), ll = (39,42), lr = (41,42), ur = (41,43)},R {ul = (20,44), ll = (20,29), lr = (35,29), ur = (35,44)}]}]}
-
-
-
-maphilbval = DS.map hilbval (treeToSet ainsert)
-
-
-
-
-
-arbinsert = Branch {hv = 726, mbr = R {ul = (2,45), ll = (2,0), lr = (46,0), ur = (46,45)}, childs = DS.fromList [Leaf {hv = 643, mbr = R {ul = (5,45), ll = (5,3), lr = (46,3), ur = (46,45)}, rects = DS.fromList [R {ul = (19,4), ll = (19,3), lr = (34,3), ur = (34,4)},R {ul = (5,42), ll = (5,22), lr = (46,22), ur = (46,42)},R {ul = (17,45), ll = (17,43), lr = (27,43), ur = (27,45)}]},Leaf {hv = 832, mbr = R {ul = (2,30), ll = (2,0), lr = (44,0), ur = (44,30)}, rects = DS.fromList [R {ul = (2,12), ll = (2,9), lr = (14,9), ur = (14,12)},R {ul = (19,30), ll = (19,11), lr = (44,11), ur = (44,30)},R {ul = (17,3), ll = (17,0), lr = (30,0), ur = (30,3)}]}]}
-recinsert = R {ul = (33,49), ll = (33,47), lr = (48,47), ur = (48,49)}
-
-resinsert = Branch {hv = 643, mbr = R {ul = (2,49), ll = (2,0), lr = (48,0), ur = (48,49)}, childs = DS.fromList [Leaf {hv = 832, mbr = R {ul = (2,30), ll = (2,0), lr = (44,0), ur = (44,30)}, rects = DS.fromList [R {ul = (2,12), ll = (2,9), lr = (14,9), ur = (14,12)},R {ul = (19,30), ll = (19,11), lr = (44,11), ur = (44,30)},R {ul = (17,3), ll = (17,0), lr = (30,0), ur = (30,3)}]},Leaf {hv = 2922, mbr = R {ul = (33,49), ll = (33,47), lr = (48,47), ur = (48,49)}, rects = DS.fromList [R {ul = (33,49), ll = (33,47), lr = (48,47), ur = (48,49)}]}]}
